@@ -102,6 +102,7 @@ export default function AdminPage() {
       try {
         const err = await r.json()
         if (err?.error === 'super_admin_taken' && err?.message) msg = err.message
+        if (err?.error === 'env_missing' && err?.message) msg = err.message
       } catch {}
       setLoginMsg(msg)
       return

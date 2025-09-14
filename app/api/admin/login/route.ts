@@ -22,6 +22,10 @@ export async function POST(req: NextRequest) {
   const adminEnv = process.env.ADMIN_PASSWORD || ''
   const superEnv = process.env.SUPER_ADMIN_PASSWORD || ''
 
+  if (!adminEnv && !superEnv) {
+    return NextResponse.json({ error: 'env_missing', message: 'Admin passwords are not configured' }, { status: 500 })
+  }
+
   let role: 'admin' | 'super_admin' | null = null
   if (superEnv && safeEqual(password, superEnv)) role = 'super_admin'
   else if (adminEnv && safeEqual(password, adminEnv)) role = 'admin'

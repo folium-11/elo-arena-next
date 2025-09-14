@@ -1,7 +1,7 @@
 // lib/auth.ts
 import crypto from 'crypto'
 import { cookies, headers } from 'next/headers'
-import { readState, writeState } from '@/lib/state'
+import { readState } from '@/lib/state'
 import { NextRequest, NextResponse } from 'next/server'
 
 export type Role = 'admin' | 'super_admin'
@@ -34,22 +34,69 @@ function clientHints() {
   return { uaHash: sha256(ua), ipHash: sha256(ip) }
 }
 
+// Stateless, signed cookie session (no filesystem store)
+function getSessionSecret() {
+  const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || ''
+  // In production we should have a real secret configured
+  return secret || 'dev-insecure-secret'
+}
+
+function b64url(input: string | Buffer) {
+  return Buffer.from(input).toString('base64').replace(/=+$/,'').replace(/\+/g,'-').replace(/\//g,'_')
+}
+function fromB64url(input: string) {
+  input = input.replace(/-/g,'+').replace(/_/g,'/')
+  const pad = input.length % 4 === 2 ? '==' : input.length % 4 === 3 ? '=' : ''
+  return Buffer.from(input + pad, 'base64')
+}
+
+function sign(data: string) {
+  return b64url(crypto.createHmac('sha256', getSessionSecret()).update(data).digest())
+}
+
+function encodeSession(sess: ServerSession) {
+  const payload = b64url(JSON.stringify(sess))
+  const sig = sign(payload)
+  return `v1.${payload}.${sig}`
+}
+
+function decodeSession(token: string | undefined): ServerSession | undefined {
+  if (!token) return undefined
+  if (!token.startsWith('v1.')) return undefined
+  const parts = token.split('.')
+  if (parts.length !== 3) return undefined
+  const payload = parts[1]
+  const sig = parts[2]
+  if (sign(payload) !== sig) return undefined
+  try {
+    const obj = JSON.parse(fromB64url(payload).toString('utf-8'))
+    return obj as ServerSession
+  } catch {
+    return undefined
+  }
+}
+
 export function getSessionFromState(sid: string | undefined) {
   const s = readState()
-  if (!sid) return { s, session: undefined as ServerSession | undefined }
-  const sess: ServerSession | undefined = s.serverSessions?.[sid]
+  const sess = decodeSession(sid)
   return { s, session: sess }
 }
 
-export function touchAndPersistSession(s: any, sess: ServerSession) {
+export function touchAndPersistSession(_: any, sess: ServerSession) {
   const now = new Date()
   sess.lastSeen = now.toISOString()
   // sliding expiration
   const exp = new Date(now.getTime() + SESSION_TTL_HOURS * 3600 * 1000)
   sess.expAt = exp.toISOString()
-  s.serverSessions = s.serverSessions || {}
-  s.serverSessions[sess.id] = sess
-  writeState(s)
+  // Re-set cookie with refreshed payload
+  const secure = process.env.NODE_ENV !== 'development'
+  cookies().set('sid', encodeSession(sess), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+    maxAge: SESSION_TTL_HOURS * 3600,
+  })
 }
 
 export function createSession(roles: Role[]) {
@@ -69,14 +116,10 @@ export function createSession(roles: Role[]) {
     expAt: exp.toISOString(),
     revocationId: 0,
   }
-  const s = readState()
-  s.serverSessions = s.serverSessions || {}
-  s.serverSessions[id] = sess
-  writeState(s)
   const secure = process.env.NODE_ENV !== 'development'
-  cookies().set('sid', id, {
+  cookies().set('sid', encodeSession(sess), {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'lax',
     secure,
     path: '/',
     maxAge: SESSION_TTL_HOURS * 3600,
@@ -86,12 +129,6 @@ export function createSession(roles: Role[]) {
 
 export function destroySession() {
   const c = cookies()
-  const sid = c.get('sid')?.value
-  const s = readState()
-  if (sid && s.serverSessions?.[sid]) {
-    delete s.serverSessions[sid]
-    writeState(s)
-  }
   cookies().set('sid', '', {
     httpOnly: true,
     sameSite: 'strict',
