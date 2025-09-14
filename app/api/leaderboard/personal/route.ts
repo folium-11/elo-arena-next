@@ -7,11 +7,12 @@ export const runtime = 'nodejs'
 export async function GET() {
   const s = readState()
   const enabled = !!s.signInEnabled
-  const did = cookies().get('did')?.value || null
+  const did = cookies().get('did')?.value || undefined
 
   if (!enabled) return NextResponse.json({ enabled: false })
 
-  const session = did ? s.activeSessions?.[did] : undefined
+  if (!did) return NextResponse.json({ enabled: true, signedIn: false, rows: [] })
+  const session = s.activeSessions?.[did]
   if (!session?.name) return NextResponse.json({ enabled: true, signedIn: false, rows: [] })
 
   const map: Record<string, number> = (s.personalRatingsByDevice?.[did] as any) || {}
