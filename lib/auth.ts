@@ -130,7 +130,7 @@ export function markStepUpNow(sess: ServerSession) {
   }
 }
 
-export function json(data: any, init?: number | ResponseInit) {
+export function json(data: any, init?: ResponseInit) {
   return NextResponse.json(data, init)
 }
 
