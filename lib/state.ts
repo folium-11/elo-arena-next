@@ -3,7 +3,25 @@ import fs from 'fs'
 import path from 'path'
 
 export type Item = { id: string; name: string; imageUrl?: string | null }
-export type State = { arenaTitle:string; items:Item[]; globalRatings:Record<string,number>; perUserRatings:Record<string,Record<string,number>>; wins:Record<string,number>; appearances:Record<string,number>; nameOverrides:Record<string,string>; contributions:Record<string,number>; allowedNames:string[]; slotLimits:Record<string,number>; extraSlots:Record<string,number>; activeSessions:Record<string,{name:string;since:string}>; signInEnabled:boolean; activePairs:Record<string,[string,string]> }
+export type State = {
+  arenaTitle: string
+  items: Item[]
+  globalRatings: Record<string, number>
+  perUserRatings: Record<string, Record<string, number>>
+  wins: Record<string, number>
+  appearances: Record<string, number>
+  nameOverrides: Record<string, string>
+  contributions: Record<string, number>
+  allowedNames: string[]
+  slotLimits: Record<string, number>
+  extraSlots: Record<string, number>
+  activeSessions: Record<string, { name: string; since: string }>
+  signInEnabled: boolean
+  activePairs: Record<string, [string, string]>
+  // Device identification (used by /api/device/identify)
+  deviceBuckets?: Record<string, string[]>
+  deviceRecords?: Record<string, any>
+}
 export const dataPath = path.join(process.cwd(),'app','data','state.json')
 export const uploadsDir = path.join(process.cwd(),'public','uploads')
 
