@@ -16,5 +16,10 @@ export async function GET() {
   return NextResponse.json({
     ...s,
     items,
+    debug: process.env.NODE_ENV !== 'production' ? { envSet: {
+      ADMIN_PASSWORD: !!process.env.ADMIN_PASSWORD,
+      SUPER_ADMIN_PASSWORD: !!process.env.SUPER_ADMIN_PASSWORD,
+      SESSION_SECRET: !!process.env.SESSION_SECRET || !!process.env.NEXTAUTH_SECRET,
+    }} : undefined,
   })
 }

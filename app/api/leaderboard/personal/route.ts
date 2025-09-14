@@ -25,5 +25,7 @@ export async function GET() {
     .sort((a, b) => b.rating - a.rating)
     .map((r, i) => ({ rank: i + 1, ...r }))
 
-  return NextResponse.json({ enabled: true, signedIn: true, name: session.name, rows })
+  const res = NextResponse.json({ enabled: true, signedIn: true, name: session.name, rows })
+  if (process.env.NODE_ENV !== 'production') res.headers.set('x-debug', 'personal_ok')
+  return res
 }

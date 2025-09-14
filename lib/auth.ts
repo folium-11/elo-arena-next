@@ -60,18 +60,44 @@ function encodeSession(sess: ServerSession) {
   return `v1.${payload}.${sig}`
 }
 
-function decodeSession(token: string | undefined): ServerSession | undefined {
-  if (!token) return undefined
-  if (!token.startsWith('v1.')) return undefined
+export function decodeSession(token: string | undefined): ServerSession | undefined {
+  if (!token) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] No token provided')
+    }
+    return undefined
+  }
+  if (!token.startsWith('v1.')) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] Token does not start with v1.:', token.substring(0, 20) + '...')
+    }
+    return undefined
+  }
   const parts = token.split('.')
-  if (parts.length !== 3) return undefined
+  if (parts.length !== 3) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] Token has wrong number of parts:', parts.length)
+    }
+    return undefined
+  }
   const payload = parts[1]
   const sig = parts[2]
-  if (sign(payload) !== sig) return undefined
+  if (sign(payload) !== sig) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] Token signature verification failed')
+    }
+    return undefined
+  }
   try {
     const obj = JSON.parse(fromB64url(payload).toString('utf-8'))
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] Successfully decoded session:', { id: obj.id, roles: obj.roles })
+    }
     return obj as ServerSession
-  } catch {
+  } catch (e) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] Failed to parse session JSON:', e)
+    }
     return undefined
   }
 }
@@ -141,11 +167,39 @@ export function destroySession() {
 export function currentSession() {
   const sid = cookies().get('sid')?.value
   const { s, session } = getSessionFromState(sid)
+  
+  // Debug logging for Vercel
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[auth/debug] currentSession:', {
+      hasSid: !!sid,
+      sidLength: sid?.length || 0,
+      hasSession: !!session,
+      sessionId: session?.id,
+      sessionRoles: session?.roles,
+      sessionExpAt: session?.expAt,
+      now: new Date().toISOString(),
+      isExpired: session ? new Date(session.expAt).getTime() <= Date.now() : 'N/A'
+    })
+  }
+  
   if (!session) return { s, session: undefined as ServerSession | undefined }
+  
   // basic binding/expiry checks (soft bind to UA/IP)
   const { uaHash } = clientHints()
-  if (session.uaHash !== uaHash) return { s, session: undefined }
-  if (new Date(session.expAt).getTime() <= Date.now()) return { s, session: undefined }
+  if (session.uaHash !== uaHash) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] UA hash mismatch:', { sessionUA: session.uaHash, currentUA: uaHash })
+    }
+    return { s, session: undefined }
+  }
+  
+  if (new Date(session.expAt).getTime() <= Date.now()) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] Session expired:', { expAt: session.expAt, now: new Date().toISOString() })
+    }
+    return { s, session: undefined }
+  }
+  
   touchAndPersistSession(s, session)
   return { s, session }
 }

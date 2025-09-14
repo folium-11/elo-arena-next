@@ -36,6 +36,23 @@ export default function AdminPage() {
   const [selectedNames, setSelectedNames] = useState<Record<string, boolean>>({})
   const importInputRef = useRef<HTMLInputElement>(null)
 
+  async function debugInfo() {
+    try {
+      const r = await fetch('/api/debug/', { cache: 'no-store' })
+      if (r.ok) {
+        const debug = await r.json()
+        console.debug('[admin/debug] Full debug info:', debug)
+        alert('Debug info logged to console. Check browser dev tools.')
+      } else {
+        console.debug('[admin/debug] Debug endpoint failed:', r.status, r.statusText)
+        alert('Debug endpoint failed. Check console for details.')
+      }
+    } catch (e) {
+      console.debug('[admin/debug] Debug request error:', e)
+      alert('Debug request failed. Check console for details.')
+    }
+  }
+
   async function whoami() {
     try {
       const r = await fetch('/api/admin/status/', { cache: 'no-store' })
@@ -45,9 +62,15 @@ export default function AdminPage() {
         else if (j.role === 'admin') setRole('admin')
         else setRole('none')
         if (j.csrf) setCsrf(String(j.csrf))
+        if (j.debug?.expAt) console.debug('[admin/debug] session expAt', j.debug.expAt)
+        console.debug('[admin/debug] whoami response:', j)
         return
+      } else {
+        console.debug('[admin/debug] whoami failed:', r.status, r.statusText)
       }
-    } catch {}
+    } catch (e) {
+      console.debug('[admin/debug] whoami error:', e)
+    }
     setRole('none')
   }
 
@@ -93,21 +116,30 @@ export default function AdminPage() {
 
   async function login() {
     setLoginMsg(null)
+    console.debug('[admin/debug] Attempting login with password length:', pass.length)
     const r = await fetch('/api/admin/login/', {
       method: 'POST',
       body: JSON.stringify({ password: pass }),
     })
+    console.debug('[admin/debug] Login response:', r.status, r.statusText)
     if (!r.ok) {
       let msg = 'Incorrect password'
       try {
         const err = await r.json()
+        console.debug('[admin/debug] Login error response:', err)
         if (err?.error === 'super_admin_taken' && err?.message) msg = err.message
         if (err?.error === 'env_missing' && err?.message) msg = err.message
-      } catch {}
+        if (err?.error === 'wrong_password' && err?.message) msg = err.message
+      } catch (e) {
+        console.debug('[admin/debug] Failed to parse error response:', e)
+      }
+      const hdr = r.headers.get('x-debug')
+      if (hdr) msg += ` (${hdr})`
       setLoginMsg(msg)
       return
     }
     const j = await r.json().catch(() => ({} as any))
+    console.debug('[admin/debug] Login success response:', j)
     if (j.role === 'admin') {
       setRole('admin')
       setLoginMsg('Admin access granted.')
@@ -326,6 +358,14 @@ export default function AdminPage() {
           <div className="text-xs text-subtext">
             {role === 'super_admin' ? 'Access level: Super Admin' : 'Access level: Admin'}
           </div>
+          {process.env.NODE_ENV !== 'production' && (
+            <button
+              onClick={debugInfo}
+              className="rounded-full border border-border px-3 py-1 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)] text-xs"
+            >
+              Debug
+            </button>
+          )}
           <button
             onClick={signOutAdmin}
             className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
