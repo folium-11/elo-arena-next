@@ -32,7 +32,30 @@ export const dataPath = path.join(process.cwd(),'app','data','state.json')
 export const uploadsDir = path.join(process.cwd(),'public','uploads')
 
 export function ensureDirs(){ if(!fs.existsSync(path.dirname(dataPath))) fs.mkdirSync(path.dirname(dataPath),{recursive:true}); if(!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir,{recursive:true}) }
-export function readState():State{ ensureDirs(); return JSON.parse(fs.readFileSync(dataPath,'utf-8')) as State }
+export function defaultState(): State {
+  return {
+    arenaTitle: 'Arena',
+    items: [],
+    globalRatings: {},
+    perUserRatings: {},
+    wins: {},
+    appearances: {},
+    nameOverrides: {},
+    contributions: {},
+    allowedNames: [],
+    slotLimits: {},
+    extraSlots: {},
+    activeSessions: {},
+    signInEnabled: false,
+    activePairs: {},
+    deviceBuckets: {},
+    deviceRecords: {},
+    personalRatingsByDevice: {},
+    currentPairByDevice: {},
+    serverSessions: {},
+  }
+}
+export function readState():State{ ensureDirs(); if(!fs.existsSync(dataPath)){ const s=defaultState(); fs.writeFileSync(dataPath, JSON.stringify(s,null,2)); return s } return JSON.parse(fs.readFileSync(dataPath,'utf-8')) as State }
 export function writeState(s:State){ ensureDirs(); fs.writeFileSync(dataPath, JSON.stringify(s,null,2)) }
 
 export function kFactor(){ return 32 }
