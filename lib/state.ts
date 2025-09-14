@@ -21,6 +21,8 @@ export type State = {
   // Device identification (used by /api/device/identify)
   deviceBuckets?: Record<string, string[]>
   deviceRecords?: Record<string, any>
+  // Optional personal ratings stored per device
+  personalRatingsByDevice?: Record<string, Record<string, number>>
 }
 export const dataPath = path.join(process.cwd(),'app','data','state.json')
 export const uploadsDir = path.join(process.cwd(),'public','uploads')
