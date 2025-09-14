@@ -1,1 +1,1 @@
-export default function Card({children,className='' }:{children:React.ReactNode;className?:string}){return <section className={`rounded-2xl border border-border bg-surface shadow-soft ${className}`}>{children}</section>}
+export default function Card({children,className='' }:{children:React.ReactNode;className?:string}){return <section className={`card-glass ${className}`}>{children}</section>}

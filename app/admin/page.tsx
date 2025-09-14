@@ -1,522 +1,557 @@
 'use client'
-import { useEffect, useState } from 'react'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Card from '@/components/Card'
 import { Section } from '@/components/Section'
+import { useDialog } from '@/components/DialogProvider'
+import FancySelect from '@/components/FancySelect'
 
-type Role = 'none' | 'admin' | 'super_admin' | 'oj_holder'
+type Item = { id: string; name: string; imageUrl?: string | null }
+type Role = 'none' | 'admin' | 'super_admin'
 
-type OjConfig = {
-  signInEnabled: boolean
-  allowedNames: string[]
-  slotLimits: Record<string, number>
-  extraSlots: Record<string, number>
-  sessionsByName: Record<string, number>
-}
-
-export default function Admin() {
+export default function AdminPage() {
+  const dialog = useDialog()
   const [role, setRole] = useState<Role>('none')
-  const [result, setResult] = useState('')
-  const [title, setTitle] = useState('')
-  const [items, setItems] = useState<any[]>([])
-  const [localNames, setLocalNames] = useState<Record<string, string>>({})
+  const [pass, setPass] = useState('')
+  const [loginMsg, setLoginMsg] = useState<string | null>(null)
+
+  const [title, setTitle] = useState('Arena')
+  const [csrf, setCsrf] = useState<string | null>(null)
+  const [items, setItems] = useState<Item[]>([])
+  const [uploadBusy, setUploadBusy] = useState(false)
+  const [uploadNote, setUploadNote] = useState('')
+
+  const [textName, setTextName] = useState('')
+  const [saveTitleBusy, setSaveTitleBusy] = useState(false)
+
   const [ojStatus, setOjStatus] = useState<any>(null)
+  const [ojBusy, setOjBusy] = useState(false)
 
-  // OJ config state
-  const [cfg, setCfg] = useState<OjConfig | null>(null)
-  const [namesText, setNamesText] = useState('')
-  const [slotLines, setSlotLines] = useState('') // "name=2" per line
-  const [extraLines, setExtraLines] = useState('') // "name=1" per line
-  const [signoutSelection, setSignoutSelection] = useState<Record<string, boolean>>({})
+  const [signInEnabled, setSignInEnabled] = useState(false)
+  const [allowedNamesText, setAllowedNamesText] = useState('')
+  const [slotRows, setSlotRows] = useState<Array<{ name: string; base: number; extra: number }>>([])
+  const [extraName, setExtraName] = useState('')
+  const [extraInput, setExtraInput] = useState('')
+  const [sessions, setSessions] = useState<Array<{ id: string; name: string; since: string }>>([])
+  const [selectedNames, setSelectedNames] = useState<Record<string, boolean>>({})
+  const importInputRef = useRef<HTMLInputElement>(null)
 
-  async function ensureFp() {
-    await fetch('/api/signin/status/', { cache: 'no-store' })
+  async function whoami() {
+    try {
+      const r = await fetch('/api/admin/status/', { cache: 'no-store' })
+      if (r.ok) {
+        const j = await r.json()
+        if (j.role === 'super_admin' || j.role === 'oj_holder') setRole('super_admin')
+        else if (j.role === 'admin') setRole('admin')
+        else setRole('none')
+        if (j.csrf) setCsrf(String(j.csrf))
+        return
+      }
+    } catch {}
+    setRole('none')
   }
-  async function me() {
-    const r = await fetch('/api/admin/me/', { cache: 'no-store' }).then((r) => r.json())
-    setRole(r.role)
-  }
-  async function loadTitle() {
-    const s = await fetch('/api/state/', { cache: 'no-store' }).then((r) => r.json())
+
+  async function refreshState() {
+    const r = await fetch('/api/state/', { cache: 'no-store' })
+    if (!r.ok) return
+    const s = await r.json()
     setTitle(s.arenaTitle || 'Arena')
-  }
-  async function loadItems() {
-    const s = await fetch('/api/state/', { cache: 'no-store' }).then((r) => r.json())
-    setItems(s.items || [])
-    setLocalNames(Object.fromEntries((s.items || []).map((it: any) => [it.id, it.name])))
-  }
-  async function loadOj() {
-    if (role === 'admin') return
-    const r = await fetch('/api/oj/status/', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null)
-    setOjStatus(r)
-  }
-  async function login(pwd: string) {
-    const r = await fetch('/api/admin/login/', {
-      method: 'POST',
-      body: JSON.stringify({ password: pwd }),
-      headers: { 'content-type': 'application/json' },
-    }).then((r) => r.json())
-    if (r.outcome === 'invalid') setResult('Incorrect password')
-    if (r.outcome === 'admin') {
-      setResult('Admin access granted.')
-      setRole('admin')
-    }
-    if (r.outcome === 'super_admin' || r.outcome === 'oj_holder') {
-      setResult('Super Admin access granted.')
-      setRole(r.outcome)
-    }
-    loadOj()
-    loadItems()
-    loadTitle()
-    loadOjConfig()
+    setItems((s.items || []) as Item[])
+    setSignInEnabled(!!s.signInEnabled)
+    const names: string[] = Array.isArray(s.allowedNames) ? s.allowedNames : []
+    setAllowedNamesText(names.join('\n'))
+    const rows: Array<{ name: string; base: number; extra: number }> = names.map((n) => ({
+      name: n,
+      base: Number.isFinite(s.slotLimits?.[n]) ? Math.max(0, Math.floor(s.slotLimits[n])) : 1,
+      extra: Number.isFinite(s.extraSlots?.[n]) ? Math.max(0, Math.floor(s.extraSlots[n])) : 0,
+    }))
+    setSlotRows(rows)
+    const sess: Array<{ id: string; name: string; since: string }> = Object.entries(s.activeSessions || {})
+      .map(([id, v]: any) => ({ id, name: v?.name || '', since: v?.since || '' }))
+      .filter((x) => x.name)
+    setSessions(sess)
   }
 
-  async function loadOjConfig() {
-    if (!(role === 'super_admin' || role === 'oj_holder')) return
-    const data: OjConfig = await fetch('/api/oj/config/', { cache: 'no-store' }).then((r) => r.json())
-    setCfg(data)
-    setNamesText((data.allowedNames || []).join('\n'))
-    const toLines = (obj: Record<string, number>) =>
-      Object.keys(obj)
-        .sort((a, b) => a.localeCompare(b))
-        .map((k) => `${k}=${obj[k]}`)
-        .join('\n')
-    setSlotLines(toLines(data.slotLimits || {}))
-    setExtraLines(toLines(data.extraSlots || {}))
-    setSignoutSelection(Object.fromEntries(Object.keys(data.sessionsByName || {}).map((n) => [n, false])))
-  }
+  async function refreshOj() { setOjStatus(null) }
 
   useEffect(() => {
-    ensureFp().then(me).then(loadItems).then(loadTitle).then(loadOj).then(loadOjConfig)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role === 'none' ? 'start' : 'ready'])
-
-  async function saveName(id: string) {
-    const current = items.find((it) => it.id === id)?.name ?? ''
-    const next = (localNames[id] ?? '').trim()
-    if (!next || next === current) return
-    const res = await fetch('/api/items/rename/', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id, name: next }),
+    whoami().then(() => {
+      if (role !== 'none') {
+        refreshState()
+        refreshOj()
+      }
     })
-    if (!res.ok) {
-      setLocalNames((prev) => ({ ...prev, [id]: current }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (role !== 'none') {
+      refreshState()
+      refreshOj()
+    }
+  }, [role])
+
+  async function login() {
+    setLoginMsg(null)
+    const r = await fetch('/api/admin/login/', {
+      method: 'POST',
+      body: JSON.stringify({ password: pass }),
+    })
+    if (!r.ok) {
+      let msg = 'Incorrect password'
+      try {
+        const err = await r.json()
+        if (err?.error === 'super_admin_taken' && err?.message) msg = err.message
+      } catch {}
+      setLoginMsg(msg)
       return
     }
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, name: next } : it)))
+    const j = await r.json().catch(() => ({} as any))
+    if (j.role === 'admin') {
+      setRole('admin')
+      setLoginMsg('Admin access granted.')
+    } else if (j.role === 'super_admin' || j.role === 'oj_holder') {
+      setRole('super_admin')
+      setLoginMsg('Super Admin access granted.')
+    } else {
+      setRole('none')
+      setLoginMsg('Incorrect password')
+    }
+    if (j.csrf) setCsrf(String(j.csrf))
+    setPass('')
   }
+
+  async function signOutAdmin() {
+    try {
+      await fetch('/api/admin/logout/', { method: 'POST' })
+    } catch {}
+    setRole('none')
+    setCsrf(null)
+    setLoginMsg('Signed out.')
+  }
+
+  async function saveTitle() {
+    setSaveTitleBusy(true)
+    await fetch('/api/arena/title/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ title }) })
+    setSaveTitleBusy(false)
+    refreshState()
+  }
+
+  async function uploadFiles(files: FileList | null) {
+    if (!files || files.length === 0) return
+    setUploadBusy(true)
+    const fileWord = files.length === 1 ? 'file' : 'files'
+    setUploadNote(`Uploading ${files.length} ${fileWord}…`)
+    const fd = new FormData()
+    Array.from(files).forEach((f) => fd.append('files', f))
+    const r = await fetch('/api/items/upload/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: fd })
+    if (!r.ok) setUploadNote('Upload failed')
+    else setUploadNote('Upload complete')
+    setUploadBusy(false)
+    refreshState()
+  }
+
+  async function addText() {
+    const name = textName.trim()
+    if (!name) return
+    await fetch('/api/items/addText/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ name }) })
+    setTextName('')
+    refreshState()
+  }
+
+  async function renameItem(id: string, name: string) {
+    const newName = name.trim()
+    if (!newName) return
+    await fetch('/api/items/rename/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ id, name: newName }) })
+    refreshState()
+  }
+
+  async function removeItem(id: string) {
+    const ok = await dialog.confirm('Remove this item?', 'Confirm removal')
+    if (!ok) return
+    await fetch('/api/items/remove/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ id }) })
+    refreshState()
+  }
+
+  async function toggleSignIn(next: boolean) {
+    await fetch('/api/signin/enable/', {
+      method: 'POST',
+      headers: csrf ? { 'x-csrf': csrf } : undefined,
+      body: JSON.stringify({ enabled: next }),
+    })
+    refreshState()
+  }
+
+  async function saveAllowedNames() {
+    const names = allowedNamesText
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    await fetch('/api/signin/allowed/', {
+      method: 'POST',
+      headers: csrf ? { 'x-csrf': csrf } : undefined,
+      body: JSON.stringify({ names }),
+    })
+    refreshState()
+  }
+
+  async function saveExtra(name: string, extra: number) {
+    await fetch('/api/signin/extra/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ name, extra }) })
+    refreshState()
+  }
+
+  async function forceSignOutSelected() {
+    const names = Object.entries(selectedNames)
+      .filter(([_, v]) => v)
+      .map(([k]) => k)
+    if (names.length === 0) return
+    const noun = names.length === 1 ? 'name' : 'names'
+    const ok = await dialog.confirm(`Sign out ${names.length} ${noun}?`, 'Confirm sign-out')
+    if (!ok) return
+    await fetch('/api/signin/forceSignout/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ names }) })
+    setSelectedNames({})
+    refreshState()
+  }
+
+  async function claimOJ() {}
+
+  async function releaseOJ() {}
+
+  async function resetOJ() {}
+
+  function exportState() {
+    window.location.href = '/api/admin/export/'
+  }
+
+  async function importState(file: File | null) {
+    if (!file) return
+    const text = await file.text()
+    await fetch('/api/admin/import/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: text,
+    })
+    refreshState()
+  }
+
+  async function resetArena() {
+    const ok = await dialog.confirm('Reset all arena data? This preserves sign-in configuration and active sessions.', 'Confirm reset')
+    if (!ok) return
+    await fetch('/api/admin/reset/', { method: 'POST' })
+    refreshState()
+  }
+
+  const itemsUI = useMemo(() => {
+    if (!items.length) return <div className="text-sm text-subtext">No items yet.</div>
+    return (
+      <div className="space-y-2">
+        {items.map((it) => (
+          <div key={it.id} className="flex items-center gap-4 border border-border rounded-2xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)] transition-shadow">
+            {it.imageUrl ? (
+              <img src={it.imageUrl} alt={it.name} className="h-16 w-16 object-cover rounded-2xl" />
+            ) : (
+              <div className="h-16 w-16 flex items-center justify-center rounded-2xl border border-border text-xs text-subtext">
+                Text
+              </div>
+            )}
+            <input
+              defaultValue={it.name}
+              onBlur={(e) => renameItem(it.id, e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              }}
+              aria-label="Item name"
+              className="flex-1 rounded-full border border-border bg-bg px-4 py-2"
+              placeholder="Enter name"
+            />
+            <button
+              onClick={() => removeItem(it.id)}
+              className="rounded-full border border-border px-4 py-2 hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }, [items])
 
   if (role === 'none') {
     return (
-      <div className="mx-auto max-w-md">
-        <Card>
-          <div className="p-6 space-y-4">
-            <h1 className="text-xl font-semibold tracking-tight">Admin</h1>
-            <div className="space-y-2">
-              <label className="text-sm text-subtext">Admin password</label>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const form = e.target as HTMLFormElement
-                  const val = (form.elements.namedItem('pwd') as HTMLInputElement).value
-                  login(val)
-                }}
-                className="flex gap-2"
-              >
-                <input name="pwd" type="password" className="flex-1 rounded-lg border border-border bg-bg px-3 py-2" />
-                <button className="rounded-lg bg-primary text-primaryFg px-3 py-2">Sign In</button>
-              </form>
-              <div className="text-sm text-warning">{result}</div>
-            </div>
+      <div className="mx-auto max-w-2xl">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            login()
+          }}
+          className="mt-12 flex flex-wrap items-start justify-center gap-3"
+        >
+          {/* Left pill: input with its own column so error can appear beneath it */}
+          <div className="flex min-w-[16rem] flex-col">
+            <input
+              type="password"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              placeholder="Admin password"
+              aria-label="Admin password"
+              className="rounded-full focus-visible:rounded-full border border-border bg-bg px-6 py-3 text-base"
+            />
+            {loginMsg && (
+              <div className="mt-2 text-xs text-warning" role="status" aria-live="polite">
+                {loginMsg}
+              </div>
+            )}
           </div>
-        </Card>
+
+          {/* Right pill: button sized to its label only */}
+          <button
+            className="rounded-full focus-visible:rounded-full border border-border px-6 py-3 text-base hover:border-primary"
+          >
+            Sign In
+          </button>
+
+        </form>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <div className="flex items-center justify-between">
-        <div className="text-sm">{role === 'admin' ? 'Admin access granted.' : 'Super Admin access granted.'}</div>
-        <button
-          onClick={async () => {
-            await fetch('/api/admin/logout/', { method: 'POST' })
-            location.reload()
-          }}
-          className="rounded-lg border border-border px-3 py-1.5 hover:border-primary"
-        >
-          Logout
-        </button>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {role === 'super_admin' ? 'Super Admin' : 'Admin'}
+        </h1>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-subtext">
+            {role === 'super_admin' ? 'Access level: Super Admin' : 'Access level: Admin'}
+          </div>
+          <button
+            onClick={signOutAdmin}
+            className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
+          >
+            Sign Out
+          </button>
+        </div>
       </div>
 
-      <Section title="Arena Settings">
+      <Section title="Arena">
         <Card>
-          <div className="p-6 space-y-3">
-            <div className="flex gap-3">
+          <div className="p-6 space-y-5">
+            <div className="flex items-center gap-3">
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-bg px-3 py-2"
+                onBlur={() => saveTitle()}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                placeholder="Arena title"
+                aria-label="Arena title"
+                className="w-72 md:w-[28rem] rounded-full border border-border bg-bg backdrop-blur-md px-4 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
               />
               <button
-                onClick={async () => {
-                  await fetch('/api/arena/title/', {
-                    method: 'POST',
-                    body: JSON.stringify({ title }),
-                    headers: { 'content-type': 'application/json' },
-                  })
-                  loadTitle()
-                }}
-                className="rounded-lg bg-primary text-primaryFg px-4"
+                onClick={saveTitle}
+                disabled={saveTitleBusy}
+                className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)] disabled:opacity-60"
               >
                 Save
               </button>
             </div>
 
-            <form
-              className="flex items-center gap-3"
-              onSubmit={async (e) => {
-                e.preventDefault()
-                const input = (e.target as HTMLFormElement).elements.namedItem('files') as HTMLInputElement
-                if (!input.files?.length) return
-                const form = new FormData()
-                for (const f of Array.from(input.files)) form.append('files', f)
-                await fetch('/api/items/upload/', { method: 'POST', body: form })
-                input.value = ''
-                loadItems()
-              }}
-            >
-              <input name="files" type="file" accept="image/*" multiple className="rounded-lg border border-border bg-bg px-3 py-2" />
-              <button className="rounded-lg border border-border px-3 py-2 hover:border-primary">Upload</button>
-            </form>
+            <div className="space-y-4">
+              <div className="text-sm font-medium">Upload images</div>
+              <label className="inline-block">
+                <span className="sr-only">Upload images</span>
+                <span className="cursor-pointer rounded-full border border-border bg-surface px-5 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]">Choose files…</span>
+                <input type="file" multiple accept="image/*" onChange={(e) => uploadFiles(e.currentTarget.files)} className="hidden" />
+              </label>
+              <div className="text-xs text-subtext">{uploadBusy ? uploadNote : uploadNote}</div>
+            </div>
 
-            <form
-              className="flex items-center gap-3"
-              onSubmit={async (e) => {
-                e.preventDefault()
-                const input = (e.target as HTMLFormElement).elements.namedItem('name') as HTMLInputElement
-                const name = input.value.trim()
-                if (!name) return
-                await fetch('/api/items/addText/', {
-                  method: 'POST',
-                  headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify({ name }),
-                })
-                input.value = ''
-                loadItems()
-              }}
-            >
-              <input name="name" placeholder="Add text item" className="flex-1 rounded-lg border border-border bg-bg px-3 py-2" />
-              <button className="rounded-lg border border-border px-3 py-2 hover:border-primary">Add</button>
-            </form>
+            <div className="flex items-center gap-3">
+              <input
+                value={textName}
+                onChange={(e) => setTextName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addText()}
+                placeholder="Add a text-only item"
+                aria-label="Text item name"
+                className="w-72 md:w-[28rem] rounded-full border border-border bg-bg backdrop-blur-md px-4 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_6px_20px_rgba(0,0,0,0.15)]"
+              />
+              <button onClick={addText} className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
+                Add
+              </button>
+            </div>
           </div>
         </Card>
       </Section>
 
       <Section title="Items">
         <Card>
-          <div className="p-4">
-            <table className="w-full text-sm">
-              <thead className="text-subtext">
-                <tr className="text-left">
-                  <th className="w-[56px]">Preview</th>
-                  <th className="w-[40%]">Name</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {items.map((it) => (
-                  <tr key={it.id}>
-                    <td className="py-2">
-                      {it.imageUrl ? (
-                        <img
-                          src={it.imageUrl}
-                          alt={it.name}
-                          className="w-12 h-12 rounded-md border border-border object-cover"
-                        />
-                      ) : (
-                        <div
-                          className="w-12 h-12 rounded-md border border-border flex items-center justify-center text-[10px] text-subtext"
-                          aria-label="Text item (no image)"
-                          title="Text item"
-                        >
-                          TXT
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2">
-                      <input
-                        value={localNames[it.id] ?? ''}
-                        onChange={(e) => setLocalNames((s) => ({ ...s, [it.id]: e.target.value }))}
-                        onBlur={() => saveName(it.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            ;(e.currentTarget as HTMLInputElement).blur()
-                          }
-                        }}
-                        className="w-full rounded-md border border-border bg-bg px-2 py-1"
-                      />
-                    </td>
-                    <td className="py-2">
-                      <button
-                        className="rounded-md border border-border px-2 py-1 hover:border-primary"
-                        onClick={async () => {
-                          await fetch('/api/items/reset/', {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ id: it.id }),
-                          })
-                          loadItems()
-                        }}
-                      >
-                        Reset
-                      </button>
-                      <button
-                        className="ml-2 rounded-md border border-border px-2 py-1 hover:border-negative"
-                        onClick={async () => {
-                          await fetch('/api/items/remove/', {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ id: it.id }),
-                          })
-                          loadItems()
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <div className="p-4">{itemsUI}</div>
         </Card>
       </Section>
 
-      {(role === 'super_admin' || role === 'oj_holder') && (
+      {role === 'super_admin' && (
         <>
-          <Section title="OJ Lock & Admin Tools">
+          <Section title="Sign-in & Sessions">
             <Card>
-              <div className="p-6 space-y-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                    onClick={async () => {
-                      await ensureFp()
-                      const r = await fetch('/api/oj/claim/', { method: 'POST' }).then((r) => r.json())
-                      setOjStatus(r)
-                    }}
-                  >
-                    Claim OJ
-                  </button>
-                  <button
-                    className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                    onClick={async () => {
-                      const r = await fetch('/api/oj/release/', { method: 'POST' }).then((r) => r.json())
-                      setOjStatus(r)
-                    }}
-                  >
-                    Release OJ
-                  </button>
-                  <button
-                    className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                    onClick={async () => {
-                      const r = await fetch('/api/oj/reset/', { method: 'POST' }).then((r) => r.json())
-                      setOjStatus(r)
-                    }}
-                  >
-                    Reset OJ
-                  </button>
-                  <span className="text-sm text-subtext">
-                    {ojStatus ? (ojStatus.holder ? `Held since ${ojStatus.since}${ojStatus.youHold ? ' (you)' : ''}` : 'Free') : ''}
-                  </span>
-                </div>
-              </div>
-            </Card>
-          </Section>
-
-          <Section title="Access & Sessions (OJ-only)">
-            <Card>
-              <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-subtext">Require sign-in for voting</div>
-                  <button
-                    className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                    onClick={async () => {
-                      const next = !cfg?.signInEnabled
-                      await fetch('/api/oj/config/', {
-                        method: 'POST',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({ signInEnabled: next }),
-                      })
-                      loadOjConfig()
-                    }}
-                  >
-                    {cfg?.signInEnabled ? 'Disable' : 'Enable'}
-                  </button>
+              <div className="p-4 space-y-6">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!signInEnabled}
+                      onChange={(e) => toggleSignIn(e.currentTarget.checked)}
+                    />
+                    Enable sign-in
+                  </label>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-sm text-subtext">Allowed names (one per line)</div>
+                  <div className="text-sm font-medium">Allowed names (one per line)</div>
                   <textarea
-                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 h-32"
-                    value={namesText}
-                    onChange={(e) => setNamesText(e.target.value)}
+                    value={allowedNamesText}
+                    onChange={(e) => setAllowedNamesText(e.target.value)}
+                    placeholder="alice\nbob"
+                    className="w-full h-40 rounded-3xl border border-border bg-bg backdrop-blur-md p-4 text-sm leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_6px_20px_rgba(0,0,0,0.15)]"
                   />
-                  <button
-                    className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                    onClick={async () => {
-                      await fetch('/api/oj/config/', {
-                        method: 'POST',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({ allowedNamesText: namesText }),
-                      })
-                      loadOjConfig()
-                    }}
-                  >
-                    Save names
-                  </button>
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <div className="text-sm text-subtext">Base slots per name — format: name=number</div>
-                    <textarea
-                      className="w-full rounded-lg border border-border bg-bg px-3 py-2 h-32"
-                      value={slotLines}
-                      onChange={(e) => setSlotLines(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-sm text-subtext">Extra slots per name — format: name=number</div>
-                    <textarea
-                      className="w-full rounded-lg border border-border bg-bg px-3 py-2 h-32"
-                      value={extraLines}
-                      onChange={(e) => setExtraLines(e.target.value)}
-                    />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={saveAllowedNames}
+                      className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
+                    >
+                      Save allowed names
+                    </button>
                   </div>
                 </div>
-                <button
-                  className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                  onClick={async () => {
-                    const parseLines = (txt: string) => {
-                      const out: Record<string, number> = {}
-                      txt
-                        .split('\n')
-                        .map((l) => l.trim())
-                        .filter(Boolean)
-                        .forEach((line) => {
-                          const [k, v] = line.split('=')
-                          const n = Number(v)
-                          if (k && !Number.isNaN(n)) out[k.trim()] = Math.max(0, Math.floor(n))
-                        })
-                      return out
-                    }
-                    await fetch('/api/oj/config/', {
-                      method: 'POST',
-                      headers: { 'content-type': 'application/json' },
-                      body: JSON.stringify({ slotLimits: parseLines(slotLines), extraSlots: parseLines(extraLines) }),
-                    })
-                    loadOjConfig()
-                  }}
-                >
-                  Save slot settings
-                </button>
 
                 <div className="space-y-2">
-                  <div className="text-sm text-subtext">Active sessions</div>
-                  {cfg && Object.keys(cfg.sessionsByName || {}).length ? (
-                    <div className="space-y-2">
-                      {Object.entries(cfg.sessionsByName).map(([name, count]) => (
-                        <label key={name} className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={!!signoutSelection[name]}
-                            onChange={(e) => setSignoutSelection((s) => ({ ...s, [name]: e.target.checked }))}
-                          />
-                          <span>
-                            {name} <span className="text-subtext">({count})</span>
-                          </span>
-                        </label>
-                      ))}
-                      <button
-                        className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                        onClick={async () => {
-                          const names = Object.keys(signoutSelection).filter((n) => signoutSelection[n])
-                          if (!names.length) return
-                          await fetch('/api/oj/forceSignout/', {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ names }),
-                          })
-                          setSignoutSelection({})
-                          loadOjConfig()
-                        }}
-                      >
-                        Force sign-out selected
-                      </button>
-                    </div>
+                  <div className="text-sm font-medium">Extra slots per name</div>
+                  {slotRows.length === 0 ? (
+                    <div className="text-xs text-subtext">No names configured.</div>
                   ) : (
-                    <div className="text-sm text-subtext">No active sessions.</div>
+                    <div className="space-y-2">
+                      <FancySelect
+                        options={slotRows.map(r => ({ value: r.name, label: r.name }))}
+                        value={extraName}
+                        placeholder="Select a name"
+                        onChange={(name) => {
+                          setExtraName(name)
+                          const row = slotRows.find((r) => r.name === name)
+                          setExtraInput(row ? String(row.extra) : '0')
+                        }}
+                        className=""
+                      />
+
+                      {extraName && (
+                        <div className="space-y-2 text-sm">
+                          {(() => {
+                            const row = slotRows.find((r) => r.name === extraName)
+                            const base = row ? row.base : 1
+                            const extra = row ? row.extra : 0
+                            const inUse = sessions.filter((s) => s.name === extraName).length
+                            const remaining = Math.max(0, base + extra - inUse)
+                            return (
+                              <>
+                                <div>
+                                  <span className="font-medium">Remaining:</span> {remaining}
+                                </div>
+                                <div className="text-xs text-subtext">(Base {base}, Extra {extra}, In Use {inUse})</div>
+                              </>
+                            )
+                          })()}
+                          <div className="flex items-center gap-2">
+                            <span>Additional slots:</span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              step={1}
+                              value={extraInput}
+                              onChange={(e) => setExtraInput(e.currentTarget.value)}
+                              className="w-24 rounded-md border border-border bg-bg px-2 py-1"
+                            />
+                            <button
+                              onClick={() => {
+                                const val = Math.max(0, Math.floor(Number(extraInput || 0)))
+                                if (!extraName) return
+                                saveExtra(extraName, val)
+                              }}
+                              className="rounded-md border border-border px-3 py-1 hover:border-primary"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Active sessions</div>
+                  {sessions.length === 0 ? (
+                    <div className="text-xs text-subtext">No active sessions.</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {sessions.map((sess) => {
+                        const name = sess.name || ''
+                        return (
+                          <label key={`${sess.id}-${name}`} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={!!selectedNames[name]}
+                              onChange={(e) => {
+                                const checked = e.currentTarget.checked
+                                setSelectedNames((prev) => ({ ...prev, [name]: checked }))
+                              }}
+                            />
+                            <span className="w-40 truncate">{name}</span>
+                            <span className="text-subtext truncate">{sess.id}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <button
+                    onClick={forceSignOutSelected}
+                    className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
+                  >
+                    Force sign-out selected
+                  </button>
+                </div>
+
               </div>
             </Card>
           </Section>
 
-          <Section title="Data (OJ-only)">
+          <Section title="Data">
             <Card>
-              <div className="p-6 space-y-4">
-                <div className="flex flex-wrap items-center gap-3">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
                   <button
-                    className="rounded-md border border-border px-3 py-1.5 hover:border-primary"
-                    onClick={() => {
-                      window.location.href = '/api/oj/export/'
-                    }}
+                    onClick={exportState}
+                    className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
                   >
-                    Export arena JSON
+                    Export JSON
                   </button>
-                  <label className="inline-flex items-center gap-2">
+                  <label className="inline-block">
+                    <span className="sr-only">Import JSON</span>
+                    <span className="cursor-pointer rounded-full border border-border bg-surface px-5 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]">Choose file…</span>
                     <input
                       type="file"
                       accept="application/json"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0]
-                        if (!f) return
-                        const text = await f.text()
-                        await fetch('/api/oj/import/', {
-                          method: 'POST',
-                          headers: { 'content-type': 'application/json' },
-                          body: JSON.stringify({ data: JSON.parse(text), preserveSignIn: true }),
-                        })
-                        alert('Imported. Reloading.')
-                        location.reload()
-                      }}
+                      onChange={(e) => importState(e.currentTarget.files?.[0] || null)}
+                      className="hidden"
                     />
                   </label>
                   <button
-                    className="rounded-md border border-border px-3 py-1.5 hover:border-negative"
-                    onClick={async () => {
-                      if (
-                        !confirm(
-                          'Reset all arena data (items, ratings, stats)? Sign-in config and sessions will be preserved.'
-                        )
-                      )
-                        return
-                      await fetch('/api/oj/resetArena/', { method: 'POST' })
-                      alert('Arena data reset.')
-                      location.reload()
-                    }}
+                    onClick={resetArena}
+                    className="rounded-full border border-border px-5 py-2 bg-surface hover:border-primary shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
                   >
                     Reset arena data
                   </button>
                 </div>
                 <div className="text-xs text-subtext">
-                  Reset clears items, ratings, wins/appearances, name overrides, contributions, and active pairs. Sign-in
-                  configuration and active sessions are preserved.
+                  Reset preserves sign-in configuration and active sessions.
                 </div>
               </div>
             </Card>

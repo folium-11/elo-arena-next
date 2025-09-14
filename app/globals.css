@@ -38,11 +38,148 @@ body {
 a { @apply text-primary underline-offset-4 hover:underline; }
 input, button, textarea, select { @apply outline-none; }
 
-/* Focus ring (no color opacity suffix on token colors) */
+ 
+
+/* Remove default rings globally, re-enable for focusable controls only */
+@layer base {
+  *, *::before, *::after { --tw-ring-shadow: 0 0 #0000; }
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
-  @apply ring-2 ring-primary ring-opacity-60 ring-offset-2 ring-offset-bg rounded-md;
+textarea:focus-visible { @apply ring-2 ring-border ring-offset-2 ring-offset-bg outline-none }
+
+/* Pill shapes, ample padding, glassy look, and glows */
+@layer base {
+  button { @apply rounded-full px-5 py-2.5 border border-border bg-surface backdrop-blur-md shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)] text-sm; }
+  input { @apply rounded-full px-4 py-2 border border-border bg-surface backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_6px_20px_rgba(0,0,0,0.15)] text-sm; }
+  textarea { @apply rounded-3xl p-4 border border-border bg-surface backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_6px_20px_rgba(0,0,0,0.15)] text-sm resize-none; }
+  select { @apply rounded-full px-4 py-2 border border-border bg-surface backdrop-blur-md shadow-[0_6px_20px_rgba(0,0,0,0.15)] text-sm; }
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
 }
+
+/* Cards and containers */
+@layer components {
+  .card-glass { @apply rounded-3xl border border-border bg-surface backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.35)]; overflow: visible; }
+}
+
+/* Atmospheric background */
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 800px at 10% 10%, color-mix(in oklab, var(--primary) 25%, transparent) 0%, transparent 60%),
+    radial-gradient(1000px 800px at 90% 20%, color-mix(in oklab, var(--primary) 20%, transparent) 0%, transparent 60%),
+    radial-gradient(900px 900px at 50% 110%, color-mix(in oklab, var(--primary) 18%, transparent) 0%, transparent 60%);
+  filter: blur(40px) saturate(120%);
+  overflow: hidden;
+}
+
+.atmosphere::before,
+.atmosphere::after {
+  content: '';
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: .35;
+  will-change: transform, opacity;
+  mix-blend-mode: screen;
+}
+
+.atmosphere::before {
+  width: 60vw;
+  height: 60vw;
+  left: -20vw;
+  top: -10vh;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--primary) 40%, transparent) 0%, transparent 65%);
+  animation: splashA 18s ease-in-out infinite alternate;
+}
+
+.atmosphere::after {
+  width: 70vw;
+  height: 70vw;
+  right: -15vw;
+  bottom: -20vh;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--primary) 30%, transparent) 0%, transparent 60%);
+  animation: splashB 22s ease-in-out infinite alternate;
+}
+
+@keyframes splashA {
+  0% { transform: translate3d(0,0,0) scale(1); opacity: .30; }
+  50% { transform: translate3d(10vw,5vh,0) scale(1.1); opacity: .45; }
+  100% { transform: translate3d(5vw,10vh,0) scale(1.05); opacity: .35; }
+}
+
+@keyframes splashB {
+  0% { transform: translate3d(0,0,0) scale(1); opacity: .28; }
+  50% { transform: translate3d(-8vw,-6vh,0) scale(1.12); opacity: .42; }
+  100% { transform: translate3d(-4vw,-10vh,0) scale(1.06); opacity: .34; }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+

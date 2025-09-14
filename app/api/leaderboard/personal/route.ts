@@ -1,6 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { readState, writeState, ensureItemStats, expectedScore, kFactor, ensurePair, sanitizeItem, uploadsDir } from '@/lib/state'
+import { NextResponse } from 'next/server'
+import { readState } from '@/lib/state'
 import { cookies } from 'next/headers'
-import fs from 'fs'
-import path from 'path'
-export async function GET(){const s=readState(); if(!s.signInEnabled) return NextResponse.json({enabled:false}); const fp=cookies().get('fp')?.value; const sess=fp?s.activeSessions[fp]:null; if(!sess) return NextResponse.json({enabled:true,signedIn:false,name:null,rows:[]}); const name=sess.name; const map=s.perUserRatings[name]||{}; const rows=Object.keys(map).map(id=>{ const it=s.items.find(x=>x.id===id); if(!it) return null; return { id, name: s.nameOverrides[id]||it.name, rating: map[id] } }).filter(Boolean).sort((a:any,b:any)=>b.rating-a.rating).map((row:any,i:number)=>({ rank:i+1, ...row })); return NextResponse.json({enabled:true,signedIn:true,name,rows}) }
+
+export const runtime = 'nodejs'
+
+export async function GET() {
+  const s = readState()
+  const enabled = !!s.signInEnabled
+  const did = cookies().get('did')?.value || null
+
+  if (!enabled) return NextResponse.json({ enabled: false })
+
+  const session = did ? s.activeSessions?.[did] : undefined
+  if (!session?.name) return NextResponse.json({ enabled: true, signedIn: false, rows: [] })
+
+  const map: Record<string, number> = (s.personalRatingsByDevice?.[did] as any) || {}
+  const items = s.items || []
+  const nameById = new Map(items.map((it: any) => [it.id, it.name]))
+
+  const rows = Object.entries(map)
+    .map(([id, rating]) => ({ id, rating: Number(rating), name: nameById.get(id) }))
+    .filter(r => r.name)
+    .sort((a, b) => b.rating - a.rating)
+    .map((r, i) => ({ rank: i + 1, ...r }))
+
+  return NextResponse.json({ enabled: true, signedIn: true, name: session.name, rows })
+}

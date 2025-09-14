@@ -7,24 +7,21 @@ export const runtime = 'nodejs'
 export async function POST(req: NextRequest) {
   const g = requireRoles(req, ['admin', 'super_admin'])
   if ('error' in g) return g.error
-  const { s } = g
-
-  let id = '', name = ''
+  const s = readState()
+  let name = ''
+  let extra = 0
   try {
     const b = await req.json()
-    id = String(b?.id || '').trim()
     name = String(b?.name || '').trim()
+    extra = Math.max(0, Math.floor(Number(b?.extra || 0)))
   } catch {
     return json('bad_payload', { status: 400 })
   }
-  if (!id || !name) return json('bad_input', { status: 400 })
-  if (name.length > 120) name = name.slice(0, 120)
-
-  const it = (s.items || []).find((x: any) => x.id === id)
-  if (!it) return json('not_found', { status: 404 })
-  it.name = name
-  s.nameOverrides = s.nameOverrides || {}
-  s.nameOverrides[id] = name
+  if (!name) return json('bad_name', { status: 400 })
+  s.extraSlots = s.extraSlots || {}
+  s.extraSlots[name] = extra
   writeState(s)
-  return json({ ok: true, id, name })
+  return json({ ok: true, name, extra })
 }
+
+

@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { readState, writeState, ensureItemStats, expectedScore, kFactor, ensurePair, sanitizeItem, uploadsDir } from '@/lib/state'
-import { cookies } from 'next/headers'
-import fs from 'fs'
-import path from 'path'
-export async function POST(){ cookies().delete('role'); return NextResponse.json({ok:true}) }
+import { destroySession, json } from '@/lib/auth'
+
+export const runtime = 'nodejs'
+
+export async function POST() {
+  destroySession()
+  return json({ ok: true })
+}

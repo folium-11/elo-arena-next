@@ -1,9 +1,39 @@
 
-.next
-node_modules
-.env.local
-uploads
-public/uploads
+.next/
+node_modules/
+
+# Env & secrets
+.env*
+!.env.local.example
+
+# Local data & uploads
+uploads/
+public/uploads/
 app/data/state.json
+
+# Logs
 *.log
+logs/
+
+# Output / build artifacts
+out/
+build/
+dist/
+
+# OS / editors
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Tests & coverage
+coverage/
+.nyc_output/
+
+# Next.js cache
+.next/cache/
+
+# Optional tool caches
+.turbo/
+.swc/
