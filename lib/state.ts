@@ -23,6 +23,8 @@ export type State = {
   deviceRecords?: Record<string, any>
   // Optional personal ratings stored per device
   personalRatingsByDevice?: Record<string, Record<string, number>>
+  // Persist last served pair by device id
+  currentPairByDevice?: Record<string, [string, string]>
 }
 export const dataPath = path.join(process.cwd(),'app','data','state.json')
 export const uploadsDir = path.join(process.cwd(),'public','uploads')
