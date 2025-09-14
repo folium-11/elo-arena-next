@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens */
+:root {
+  --bg: #0b0c0f;
+  --surface: #111319;
+  --text: #e8eaf1;
+  --subtext: #b0b6c3;
+  --primary: #6ea8fe;
+  --primary-fg: #0b0c0f;
+  --border: #232734;
+  --positive: #34d399;
+  --negative: #f87171;
+  --warning: #fbbf24;
+}
+
+[data-theme="light"] {
+  --bg: #fafbff;
+  --surface: #ffffff;
+  --text: #0b0c0f;
+  --subtext: #475569;
+  --primary: #2563eb;
+  --primary-fg: #ffffff;
+  --border: #e5e7eb;
+  --positive: #059669;
+  --negative: #dc2626;
+  --warning: #b45309;
+}
+
+html, body { height: 100%; }
+
+body {
+  @apply bg-bg text-text antialiased font-sans;
+}
+
+a { @apply text-primary underline-offset-4 hover:underline; }
+input, button, textarea, select { @apply outline-none; }
+
+/* Focus ring (no color opacity suffix on token colors) */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  @apply ring-2 ring-primary ring-opacity-60 ring-offset-2 ring-offset-bg rounded-md;
+}

@@ -1,0 +1,1 @@
+export function Section({title,children,actions}:{title:string;children:React.ReactNode;actions?:React.ReactNode}){return(<div className='space-y-4'><div className='flex items-end justify-between'><h2 className='text-lg font-semibold tracking-tight'>{title}</h2>{actions}</div>{children}</div>)}
