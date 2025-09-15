@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readState, writeState } from '@/lib/state'
 import { cookies } from 'next/headers'
+import { readState, writeState } from '@/lib/state'
+import {
+  assignNewPair,
+  buildGlobalLeaderboard,
+  buildPersonalLeaderboard,
+  sanitizeItemsForClient,
+} from '@/lib/arena'
 
 export const runtime = 'nodejs'
 const K = 32
@@ -42,15 +48,23 @@ export async function POST(req: NextRequest) {
     map[loserId] = Math.round(plb + K * (0 - peb))
   }
 
-  const items = s.items || []
-  if (did && items.length >= 2) {
-    let i = Math.floor(Math.random() * items.length)
-    let j = Math.floor(Math.random() * items.length)
-    if (i === j) j = (j + 1) % items.length
-    s.currentPairByDevice = s.currentPairByDevice || {}
-    s.currentPairByDevice[did] = [items[i].id, items[j].id]
+  const nextPair = assignNewPair(s, did)
+  const persistPromise = writeState(s)
+  const globalRows = buildGlobalLeaderboard(s)
+  const personal = buildPersonalLeaderboard(s, did)
+  const payload = {
+    ok: true,
+    title: s.arenaTitle || 'Arena',
+    items: sanitizeItemsForClient(s),
+    itemsCount: (s.items || []).length,
+    pair: nextPair,
+    globalRows,
+    personalMode: personal.mode,
+    personalRows: personal.mode === 'signedIn' ? personal.rows : [],
+    signInEnabled: !!s.signInEnabled,
+    signedIn: personal.signedIn,
+    myName: personal.name,
   }
-
-  await writeState(s)
-  return NextResponse.json({ ok: true })
+  await persistPromise
+  return NextResponse.json(payload)
 }

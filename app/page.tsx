@@ -1,12 +1,26 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Card from '@/components/Card'
 import { Section } from '@/components/Section'
 
 type Item = { id: string; name: string; imageUrl?: string | null }
 type Pair = [Item, Item]
 type PersonalMode = 'anon' | 'signedIn' | 'signedOut'
+type GlobalRow = { rank: number; id: string; name: string; rating: number; w: number; l: number; wp: number }
+type PersonalRow = { rank: number; id: string; name: string; rating: number }
+type HomePayload = {
+  title: string
+  items: Item[]
+  itemsCount: number
+  pair: Pair | null
+  globalRows: GlobalRow[]
+  personalMode: PersonalMode
+  personalRows: PersonalRow[]
+  signInEnabled: boolean
+  signedIn: boolean
+  myName: string
+}
 
 const K = 32
 function expected(a: number, b: number) { return 1 / (1 + Math.pow(10, (b - a) / 400)) }
@@ -20,6 +34,110 @@ function updateLocalPersonal(winnerId: string, loserId: string) {
   map[winnerId] = Math.round(wa + K * (1 - ea))
   map[loserId] = Math.round(lb + K * (0 - eb))
   localStorage.setItem('personalRatings', JSON.stringify(map))
+}
+
+function buildLocalPersonalRows(items: Item[]): PersonalRow[] {
+  if (typeof window === 'undefined') return []
+  const raw = localStorage.getItem('personalRatings') || '{}'
+  const map: Record<string, number> = JSON.parse(raw)
+  const nameById = new Map(items.map((it) => [it.id, it.name]))
+  let trimmed = false
+  for (const id of Object.keys(map)) {
+    if (!nameById.has(id)) {
+      delete map[id]
+      trimmed = true
+    }
+  }
+  if (trimmed) localStorage.setItem('personalRatings', JSON.stringify(map))
+  return Object.entries(map)
+    .map(([id, rating]) => {
+      const name = nameById.get(id)
+      if (!name) return null
+      return { id, name, rating: Number(rating) }
+    })
+    .filter((row): row is { id: string; name: string; rating: number } => !!row)
+    .sort((a, b) => b.rating - a.rating)
+    .map((row, index) => ({ rank: index + 1, ...row }))
+}
+
+function normalizeHomePayload(data: any): HomePayload {
+  const items: Item[] = Array.isArray(data?.items)
+    ? data.items
+        .map((it: any) => ({
+          id: String(it?.id || ''),
+          name: String(it?.name || ''),
+          imageUrl: typeof it?.imageUrl === 'string' ? it.imageUrl : null,
+        }))
+        .filter((it: Item) => it.id && it.name)
+    : []
+
+  let pair: Pair | null = null
+  if (Array.isArray(data?.pair) && data.pair.length === 2) {
+    const first = data.pair[0]
+    const second = data.pair[1]
+    const a: Item = {
+      id: String(first?.id || ''),
+      name: String(first?.name || ''),
+      imageUrl: typeof first?.imageUrl === 'string' ? first.imageUrl : null,
+    }
+    const b: Item = {
+      id: String(second?.id || ''),
+      name: String(second?.name || ''),
+      imageUrl: typeof second?.imageUrl === 'string' ? second.imageUrl : null,
+    }
+    if (a.id && a.name && b.id && b.name) {
+      pair = [a, b]
+    }
+  }
+
+  const globalRows: GlobalRow[] = Array.isArray(data?.globalRows)
+    ? data.globalRows
+        .map((row: any, index: number): GlobalRow => ({
+          rank: Number(row?.rank ?? index + 1),
+          id: String(row?.id || ''),
+          name: String(row?.name || ''),
+          rating: Number(row?.rating ?? 0),
+          w: Number(row?.w ?? 0),
+          l: Number(row?.l ?? 0),
+          wp: Number(row?.wp ?? 0),
+        }))
+        .filter((row: GlobalRow) => !!row.id && !!row.name)
+    : []
+
+  const signInEnabled = !!data?.signInEnabled
+  const signedIn = !!data?.signedIn
+
+  let personalMode: PersonalMode = 'anon'
+  if (data?.personalMode === 'signedIn' || data?.personalMode === 'signedOut' || data?.personalMode === 'anon') {
+    personalMode = data.personalMode
+  } else if (signInEnabled) {
+    personalMode = signedIn ? 'signedIn' : 'signedOut'
+  }
+
+  const personalRows: PersonalRow[] =
+    personalMode === 'signedIn' && Array.isArray(data?.personalRows)
+      ? data.personalRows
+          .map((row: any, index: number): PersonalRow => ({
+            rank: Number(row?.rank ?? index + 1),
+            id: String(row?.id || ''),
+            name: String(row?.name || ''),
+            rating: Number(row?.rating ?? 0),
+          }))
+          .filter((row: PersonalRow) => !!row.id && !!row.name)
+      : []
+
+  return {
+    title: typeof data?.title === 'string' && data.title.trim() ? data.title : 'Arena',
+    items,
+    itemsCount: typeof data?.itemsCount === 'number' ? data.itemsCount : items.length,
+    pair,
+    globalRows,
+    personalMode,
+    personalRows,
+    signInEnabled,
+    signedIn,
+    myName: typeof data?.myName === 'string' ? data.myName : '',
+  }
 }
 
 async function sha256Hex(str: string) {
@@ -117,8 +235,8 @@ export default function Home() {
   const [title, setTitle] = useState('Arena')
   const [pair, setPair] = useState<Pair | null>(null)
   const [busy, setBusy] = useState(false)
-  const [globalRows, setGlobalRows] = useState<any[]>([])
-  const [personalRows, setPersonalRows] = useState<any[]>([])
+  const [globalRows, setGlobalRows] = useState<GlobalRow[]>([])
+  const [personalRows, setPersonalRows] = useState<PersonalRow[]>([])
   const [itemsCount, setItemsCount] = useState(0)
 
   const [signInEnabled, setSignInEnabled] = useState(false)
@@ -131,6 +249,7 @@ export default function Home() {
   const canVoteRef = useRef(false)
   const pairRef = useRef<Pair | null>(null)
   const busyRef = useRef(false)
+  const itemsRef = useRef<Item[]>([])
 
   const canVote = (!signInEnabled || signedIn) && !!pair && !busy
   useEffect(() => {
@@ -139,51 +258,42 @@ export default function Home() {
   useEffect(() => { pairRef.current = pair }, [pair])
   useEffect(() => { busyRef.current = busy }, [busy])
 
-  async function refreshSignIn() {
-    const s = await fetch('/api/signin/status/', { cache: 'no-store' }).then(r => r.json())
-    setSignInEnabled(!!s.enabled)
-    setSignedIn(!!s.signedIn)
-    setMyName(s.name || '')
-  }
-
-  async function refreshPair() {
-    const s = await fetch('/api/state/', { cache: 'no-store' }).then(r => r.json())
-    setTitle(s.arenaTitle || 'Arena')
-    setItemsCount((s.items || []).length)
-    const r = await fetch('/api/pair/', { cache: 'no-store' }).then(r => r.json())
-    setPair(r.pair)
-  }
-
-  async function refreshLeaderboards() {
-    const g = await fetch('/api/leaderboard/global/', { cache: 'no-store' }).then(r => r.json())
-    setGlobalRows(g.ready ? g.rows : [])
-
-    const p = await fetch('/api/leaderboard/personal/', { cache: 'no-store' }).then(r => r.json())
-    const s = await fetch('/api/state/', { cache: 'no-store' }).then(r => r.json())
-    setItemsCount((s.items || []).length)
-
-    if (p.enabled === false) {
-      setPersonalMode('anon')
-      const map = JSON.parse(localStorage.getItem('personalRatings') || '{}')
-      const nameById = new Map((s.items as Item[]).map(it => [it.id, it.name]))
-      Object.keys(map).forEach(k => { if (!nameById.has(k)) delete map[k] })
-      localStorage.setItem('personalRatings', JSON.stringify(map))
-      const rows = Object.entries(map)
-        .map(([id, rating]: any) => ({ id, name: nameById.get(id), rating: Number(rating) }))
-        .filter(r => r.name)
-        .sort((a, b) => b.rating - a.rating)
-        .map((row, i) => ({ rank: i + 1, ...row }))
-      setPersonalRows(rows)
-    } else if (p.signedIn) {
-      setPersonalMode('signedIn')
-      setPersonalRows(p.rows || [])
+  const applyHomePayload = useCallback((payload: HomePayload) => {
+    const incomingItems = Array.isArray(payload.items) ? payload.items : []
+    const normalizedItems = incomingItems.length > 0 || payload.itemsCount === 0 ? incomingItems : itemsRef.current
+    itemsRef.current = normalizedItems
+    setTitle(payload.title || 'Arena')
+    setItemsCount(typeof payload.itemsCount === 'number' ? payload.itemsCount : normalizedItems.length)
+    setPair(payload.pair || null)
+    setGlobalRows(Array.isArray(payload.globalRows) ? payload.globalRows : [])
+    setSignInEnabled(!!payload.signInEnabled)
+    setSignedIn(!!payload.signedIn)
+    setMyName(payload.myName || '')
+    setPersonalMode(payload.personalMode)
+    if (payload.personalMode === 'signedIn') {
+      setPersonalRows(Array.isArray(payload.personalRows) ? payload.personalRows : [])
+    } else if (payload.personalMode === 'anon') {
+      setPersonalRows(buildLocalPersonalRows(normalizedItems))
     } else {
-      setPersonalMode('signedOut')
       setPersonalRows([])
     }
-  }
+  }, [])
 
-  async function doVote(side: 'left' | 'right') {
+  const refreshAll = useCallback(async () => {
+    try {
+      const res = await fetch('/api/home/', { cache: 'no-store' })
+      if (!res.ok) throw new Error(`Failed to fetch home data: ${res.status}`)
+      const data = await res.json()
+      if (!data || typeof data !== 'object') throw new Error('Invalid home payload')
+      applyHomePayload(normalizeHomePayload(data))
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to refresh arena data', err)
+      }
+    }
+  }, [applyHomePayload])
+
+  const doVote = useCallback(async (side: 'left' | 'right') => {
     const current = pairRef.current
     if (!current || busyRef.current || !canVoteRef.current) return
     busyRef.current = true
@@ -192,22 +302,32 @@ export default function Home() {
     const winner = side === 'left' ? current[0] : current[1]
     const loser = side === 'left' ? current[1] : current[0]
 
-    const res = await fetch('/api/vote/', {
-      method: 'POST',
-      body: JSON.stringify({ winnerId: winner.id, loserId: loser.id }),
-    })
-    if (res.status === 403) {
-      setBusy(false); busyRef.current = false
-      await refreshSignIn()
-      return
+    try {
+      const res = await fetch('/api/vote/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ winnerId: winner.id, loserId: loser.id }),
+      })
+      if (res.status === 403) {
+        await refreshAll()
+        return
+      }
+      if (!res.ok) throw new Error(`Vote failed: ${res.status}`)
+      if (!signInEnabled) updateLocalPersonal(winner.id, loser.id)
+      const data = await res.json().catch(() => null)
+      if (data && typeof data === 'object') {
+        applyHomePayload(normalizeHomePayload(data))
+      } else {
+        await refreshAll()
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') console.error('Vote failed', err)
+      await refreshAll()
+    } finally {
+      setBusy(false)
+      busyRef.current = false
     }
-
-    if (!signInEnabled) updateLocalPersonal(winner.id, loser.id)
-
-    setBusy(false); busyRef.current = false
-    refreshPair()
-    refreshLeaderboards()
-  }
+  }, [applyHomePayload, refreshAll, signInEnabled])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -221,23 +341,26 @@ export default function Home() {
     }
     document.addEventListener('keydown', onKey, { passive: false })
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [doVote])
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false
+    void refreshAll()
+    ;(async () => {
       try {
         const sig = await collectFingerprint()
+        if (cancelled) return
         await fetch('/api/device/identify', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ sig }),
         })
       } catch {}
-      await refreshSignIn()
-      await refreshPair()
-      await refreshLeaderboards()
     })()
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [refreshAll])
 
   function renderItem(it: Item | null) {
     if (!it) return null
@@ -282,8 +405,7 @@ export default function Home() {
                   return
                 }
                 setNameInput('')
-                await refreshSignIn()
-                await refreshLeaderboards()
+                await refreshAll()
               }}
               className="flex items-center gap-2 text-xs"
             >
@@ -363,7 +485,7 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {globalRows.map((r: any) => (
+                    {globalRows.map((r) => (
                       <tr key={r.id}>
                         <td className="py-2">{r.rank}</td>
                         <td className="truncate">{r.name}</td>
@@ -398,7 +520,7 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {personalRows.map((r: any) => (
+                    {personalRows.map((r) => (
                       <tr key={r.id}>
                         <td className="py-2">{r.rank}</td>
                         <td className="truncate">{r.name}</td>
