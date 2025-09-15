@@ -72,7 +72,7 @@ export async function readState(): Promise<State> {
       const meta = await head('state.json', {
         token: process.env.BLOB_READ_WRITE_TOKEN,
       })
-      const res = await fetch(meta.downloadUrl || meta.url)
+      const res = await fetch(meta.downloadUrl || meta.url, { cache: 'no-store' })
       if (res.ok) {
         const text = await res.text()
         cachedState = JSON.parse(text) as State
@@ -100,6 +100,8 @@ export async function writeState(s: State): Promise<void> {
     await put('state.json', JSON.stringify(s), {
       access: 'public',
       contentType: 'application/json',
+      addRandomSuffix: false,
+      allowOverwrite: true,
       token: process.env.BLOB_READ_WRITE_TOKEN,
     })
     return
