@@ -18,14 +18,10 @@ export type State = {
   activeSessions: Record<string, { name: string; since: string }>
   signInEnabled: boolean
   activePairs: Record<string, [string, string]>
-  // Device identification (used by /api/device/identify)
   deviceBuckets?: Record<string, string[]>
   deviceRecords?: Record<string, any>
-  // Optional personal ratings stored per device
   personalRatingsByDevice?: Record<string, Record<string, number>>
-  // Persist last served pair by device id
   currentPairByDevice?: Record<string, [string, string]>
-  // Admin auth sessions
   serverSessions?: Record<string, any>
 }
 export const dataPath = path.join(process.cwd(),'app','data','state.json')

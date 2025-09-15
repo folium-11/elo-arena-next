@@ -1,4 +1,3 @@
-// lib/jwt-auth.ts
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 import { NextResponse } from 'next/server'
@@ -37,7 +36,6 @@ export async function getCurrentUser(): Promise<{ role: Role | 'none'; error?: N
     if (process.env.NODE_ENV !== 'production') {
       console.debug('[jwt-auth/debug] JWT verification failed:', error)
     }
-    // clear bad/expired cookie
     cookies().set('sid', '', { httpOnly: true, path: '/', maxAge: 0 })
     return { role: 'none' }
   }

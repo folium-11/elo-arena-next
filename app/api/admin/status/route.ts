@@ -26,7 +26,7 @@ export async function GET() {
       return NextResponse.json({ role: 'none' }, { headers })
     }
 
-    const { payload } = await jwtVerify(token, secret) // throws on bad/expired
+    const { payload } = await jwtVerify(token, secret)
     const role = payload.role === 'super_admin' ? 'super_admin'
               : payload.role === 'admin' ? 'admin'
               : 'none'
@@ -40,7 +40,6 @@ export async function GET() {
     if (process.env.NODE_ENV !== 'production') {
       console.debug('[admin/status/debug] JWT verification failed:', error)
     }
-    // clear bad/expired cookie
     cookies().set('sid', '', { httpOnly: true, path: '/', maxAge: 0 })
     return NextResponse.json({ role: 'none' }, { headers })
   }

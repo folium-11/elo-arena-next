@@ -49,7 +49,6 @@ export function ThemeToggleButton({
       aria-pressed={isLight}
       {...props}
     >
-      {/* Icons layer */}
       <span className="relative z-[2] grid place-items-center">
         <Sun
           className={cn(
@@ -64,8 +63,6 @@ export function ThemeToggleButton({
           )}
         />
       </span>
-
-      {/* Wipe overlay */}
       {variant === 'polygon' && (
         <span
           aria-hidden

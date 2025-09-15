@@ -13,12 +13,11 @@ export async function POST(req: NextRequest) {
   const { bucketId, deviceId } = deriveIds(sig)
 
   const s = readState()
-  s.deviceBuckets = s.deviceBuckets || {}               // bucketId -> deviceId[]
-  s.deviceRecords = s.deviceRecords || {}               // deviceId -> record{ sig, ... }
+  s.deviceBuckets = s.deviceBuckets || {}
+  s.deviceRecords = s.deviceRecords || {}
 
   let chosen = deviceId
 
-  // Try soft match within bucket
   const list: string[] = s.deviceBuckets[bucketId] || []
   let best = { id: '', score: -1 }
   for (const id of list) {
@@ -28,17 +27,14 @@ export async function POST(req: NextRequest) {
     if (sc > best.score) best = { id, score: sc }
   }
 
-  // Threshold: 3.0 (tune as needed)
   if (best.id && best.score >= 3.0) {
     chosen = best.id
-    // Optionally refresh stored sig with latest minor details
     const rec = s.deviceRecords[chosen]
     rec.lastSeen = new Date().toISOString()
     rec.usageCount = (rec.usageCount || 0) + 1
     rec.sig = { ...rec.sig, ...sig }
     s.deviceRecords[chosen] = rec
   } else {
-    // New device record
     const rec = {
       deviceId,
       bucketId,
@@ -52,15 +48,13 @@ export async function POST(req: NextRequest) {
   }
 
   writeState(s)
-
-  // Set long-lived, HttpOnly cookie
   const secure = process.env.NODE_ENV !== 'development'
   cookies().set('did', chosen, {
     httpOnly: true,
     sameSite: 'lax',
     secure,
     path: '/',
-    maxAge: 60 * 60 * 24 * 365, // 1 year
+    maxAge: 60 * 60 * 24 * 365,
   })
 
   return NextResponse.json({ device_id: chosen })

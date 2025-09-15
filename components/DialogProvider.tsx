@@ -42,7 +42,6 @@ export default function DialogProvider({ children }: { children: React.ReactNode
   return (
     <DialogCtx.Provider value={api}>
       {children}
-      {/* Overlay modal */}
       {dlg.type !== 'none' && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={close} />

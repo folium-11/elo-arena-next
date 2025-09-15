@@ -7,7 +7,6 @@ function hmac(payload: any) {
   return crypto.createHmac('sha256', SECRET).update(s).digest('hex')
 }
 
-/** Produce a coarse bucket id (stable subset) and a device id (full sig). */
 export function deriveIds(sig: any) {
   const stable = {
     uaPlatform: sig.ua?.platform || '',
@@ -34,7 +33,6 @@ export function deriveIds(sig: any) {
   return { bucketId, deviceId }
 }
 
-/** Soft match score between two raw signatures (not HMACs). Threshold ≈ 3.0 */
 export function similarity(a: any, b: any) {
   let s = 0
   const low = (x?: string) => String(x || '').toLowerCase()

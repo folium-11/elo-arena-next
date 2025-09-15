@@ -1,4 +1,3 @@
-// lib/auth.ts
 import crypto from 'crypto'
 import { cookies, headers } from 'next/headers'
 import { readState } from '@/lib/state'
@@ -29,15 +28,12 @@ function sha256(s: string) {
 function clientHints() {
   const h = headers()
   const ua = h.get('user-agent') || ''
-  // first XFF entry, if present
   const ip = (h.get('x-forwarded-for') || '').split(',')[0].trim() || '0.0.0.0'
   return { uaHash: sha256(ua), ipHash: sha256(ip) }
 }
 
-// Stateless, signed cookie session (no filesystem store)
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || ''
-  // In production we should have a real secret configured
   return secret || 'dev-insecure-secret'
 }
 
@@ -121,10 +117,8 @@ export function getSessionFromState(sid: string | undefined) {
 export function touchAndPersistSession(_: any, sess: ServerSession) {
   const now = new Date()
   sess.lastSeen = now.toISOString()
-  // sliding expiration
   const exp = new Date(now.getTime() + SESSION_TTL_HOURS * 3600 * 1000)
   sess.expAt = exp.toISOString()
-  // Re-set cookie with refreshed payload
   const isDev = process.env.NODE_ENV === 'development'
   const isVercel = process.env.VERCEL === '1'
   const secure = !isDev && (isVercel || process.env.NODE_ENV === 'production')
@@ -154,8 +148,7 @@ export function createSession(roles: Role[]) {
     expAt: exp.toISOString(),
     revocationId: 0,
   }
-  
-  // Debug cookie settings
+
   const isDev = process.env.NODE_ENV === 'development'
   const isVercel = process.env.VERCEL === '1'
   const secure = !isDev && (isVercel || process.env.NODE_ENV === 'production')
@@ -196,8 +189,6 @@ export function destroySession() {
 export function currentSession() {
   const sid = cookies().get('sid')?.value
   const { s, session } = getSessionFromState(sid)
-  
-  // Debug logging for Vercel
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[auth/debug] currentSession:', {
       hasSid: !!sid,
@@ -220,8 +211,7 @@ export function currentSession() {
     }
     return { s, session: undefined as ServerSession | undefined }
   }
-  
-  // basic binding/expiry checks (soft bind to UA/IP)
+
   const { uaHash } = clientHints()
   if (session.uaHash !== uaHash) {
     if (process.env.NODE_ENV !== 'production') {
@@ -243,8 +233,6 @@ export function currentSession() {
   touchAndPersistSession(s, session)
   return { s, session }
 }
-
-// OJ lock removed
 
 export function needsStepUp(sess?: ServerSession) {
   if (!sess?.stepUpAt) return true
@@ -283,8 +271,6 @@ export function requireRoles(
 
   const base = session.roles.some((r) => allowed.includes(r))
   if (!base) return { error: forbid() }
-
-  // CSRF for state-changing methods
   const method = req.method.toUpperCase()
   const wantCsrf = opts?.csrf ?? (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS')
   if (wantCsrf) {

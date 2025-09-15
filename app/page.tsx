@@ -22,7 +22,6 @@ function updateLocalPersonal(winnerId: string, loserId: string) {
   localStorage.setItem('personalRatings', JSON.stringify(map))
 }
 
-/* ------------------ Fingerprint helpers (promptless) ------------------ */
 async function sha256Hex(str: string) {
   const enc = new TextEncoder()
   const buf = await crypto.subtle.digest('SHA-256', enc.encode(str))
@@ -62,7 +61,6 @@ async function audioHash() {
     osc.start(0); osc.stop(0.05)
     const buf = await ctx.startRendering()
     const data = buf.getChannelData(0)
-    // Sample down to keep it light
     let acc = 0
     for (let i = 0; i < data.length; i += 64) acc += Math.round((data[i] + 1) * 1000)
     return await sha256Hex(String(acc))
@@ -114,7 +112,6 @@ async function collectFingerprint() {
 
   return { ua, tz, lang, screen: screenInfo, webgl, canvas, audio }
 }
-/* --------------------------------------------------------------------- */
 
 export default function Home() {
   const [title, setTitle] = useState('Arena')
@@ -131,7 +128,6 @@ export default function Home() {
   const [signInError, setSignInError] = useState<string | null>(null)
   const [personalMode, setPersonalMode] = useState<PersonalMode>('anon')
 
-  // Stable refs for keyboard handler
   const canVoteRef = useRef(false)
   const pairRef = useRef<Pair | null>(null)
   const busyRef = useRef(false)
@@ -211,7 +207,6 @@ export default function Home() {
     refreshLeaderboards()
   }
 
-  // Keyboard voting
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
@@ -226,7 +221,6 @@ export default function Home() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
-  // On first load, identify device (promptless), then load state
   useEffect(() => {
     (async () => {
       try {

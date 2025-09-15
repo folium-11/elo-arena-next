@@ -3,7 +3,6 @@ import { cookies, headers } from 'next/headers'
 import { getCurrentUser } from '@/lib/jwt-auth'
 
 export async function GET(req: NextRequest) {
-  // Only allow in non-production
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Not available in production' }, { status: 403 })
   }
