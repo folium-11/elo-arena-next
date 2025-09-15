@@ -82,16 +82,26 @@ export function decodeSession(token: string | undefined): ServerSession | undefi
   }
   const payload = parts[1]
   const sig = parts[2]
-  if (sign(payload) !== sig) {
+  const expectedSig = sign(payload)
+  if (expectedSig !== sig) {
     if (process.env.NODE_ENV !== 'production') {
-      console.debug('[auth/debug] Token signature verification failed')
+      console.debug('[auth/debug] Token signature verification failed:', {
+        expected: expectedSig,
+        received: sig,
+        payloadLength: payload.length
+      })
     }
     return undefined
   }
   try {
     const obj = JSON.parse(fromB64url(payload).toString('utf-8'))
     if (process.env.NODE_ENV !== 'production') {
-      console.debug('[auth/debug] Successfully decoded session:', { id: obj.id, roles: obj.roles })
+      console.debug('[auth/debug] Successfully decoded session:', { 
+        id: obj.id, 
+        roles: obj.roles,
+        expAt: obj.expAt,
+        createdAt: obj.createdAt
+      })
     }
     return obj as ServerSession
   } catch (e) {
@@ -115,7 +125,9 @@ export function touchAndPersistSession(_: any, sess: ServerSession) {
   const exp = new Date(now.getTime() + SESSION_TTL_HOURS * 3600 * 1000)
   sess.expAt = exp.toISOString()
   // Re-set cookie with refreshed payload
-  const secure = process.env.NODE_ENV !== 'development'
+  const isDev = process.env.NODE_ENV === 'development'
+  const isVercel = process.env.VERCEL === '1'
+  const secure = !isDev && (isVercel || process.env.NODE_ENV === 'production')
   cookies().set('sid', encodeSession(sess), {
     httpOnly: true,
     sameSite: 'lax',
@@ -142,7 +154,22 @@ export function createSession(roles: Role[]) {
     expAt: exp.toISOString(),
     revocationId: 0,
   }
-  const secure = process.env.NODE_ENV !== 'development'
+  
+  // Debug cookie settings
+  const isDev = process.env.NODE_ENV === 'development'
+  const isVercel = process.env.VERCEL === '1'
+  const secure = !isDev && (isVercel || process.env.NODE_ENV === 'production')
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[auth/debug] Cookie settings:', {
+      isDev,
+      isVercel,
+      secure,
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL
+    })
+  }
+  
   cookies().set('sid', encodeSession(sess), {
     httpOnly: true,
     sameSite: 'lax',
@@ -154,11 +181,13 @@ export function createSession(roles: Role[]) {
 }
 
 export function destroySession() {
-  const c = cookies()
+  const isDev = process.env.NODE_ENV === 'development'
+  const isVercel = process.env.VERCEL === '1'
+  const secure = !isDev && (isVercel || process.env.NODE_ENV === 'production')
   cookies().set('sid', '', {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV !== 'development',
+    sameSite: 'lax',
+    secure,
     path: '/',
     maxAge: 0,
   })
@@ -173,16 +202,24 @@ export function currentSession() {
     console.debug('[auth/debug] currentSession:', {
       hasSid: !!sid,
       sidLength: sid?.length || 0,
+      sidPreview: sid ? sid.substring(0, 20) + '...' : 'none',
       hasSession: !!session,
       sessionId: session?.id,
       sessionRoles: session?.roles,
       sessionExpAt: session?.expAt,
       now: new Date().toISOString(),
-      isExpired: session ? new Date(session.expAt).getTime() <= Date.now() : 'N/A'
+      isExpired: session ? new Date(session.expAt).getTime() <= Date.now() : 'N/A',
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL
     })
   }
   
-  if (!session) return { s, session: undefined as ServerSession | undefined }
+  if (!session) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[auth/debug] No valid session found')
+    }
+    return { s, session: undefined as ServerSession | undefined }
+  }
   
   // basic binding/expiry checks (soft bind to UA/IP)
   const { uaHash } = clientHints()
@@ -200,6 +237,9 @@ export function currentSession() {
     return { s, session: undefined }
   }
   
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[auth/debug] Session valid, touching and persisting')
+  }
   touchAndPersistSession(s, session)
   return { s, session }
 }

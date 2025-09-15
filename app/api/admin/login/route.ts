@@ -87,8 +87,17 @@ export async function POST(req: NextRequest) {
   const sess = createSession([role])
 
   if (process.env.NODE_ENV !== 'production') {
-    console.debug('[admin/login/debug] Created session:', { id: sess.id, roles: sess.roles })
+    console.debug('[admin/login/debug] Created session:', { 
+      id: sess.id, 
+      roles: sess.roles,
+      expAt: sess.expAt,
+      createdAt: sess.createdAt,
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL
+    })
   }
 
-  return NextResponse.json({ ok: true, role, csrf: sess.csrfSecret })
+  const response = NextResponse.json({ ok: true, role, csrf: sess.csrfSecret })
+  response.headers.set('x-debug', 'session_created')
+  return response
 }

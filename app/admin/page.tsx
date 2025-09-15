@@ -56,6 +56,9 @@ export default function AdminPage() {
   async function whoami() {
     try {
       const r = await fetch('/api/admin/status/', { cache: 'no-store' })
+      const debugHeader = r.headers.get('x-debug')
+      console.debug('[admin/debug] whoami response status:', r.status, 'debug:', debugHeader)
+      
       if (r.ok) {
         const j = await r.json()
         if (j.role === 'super_admin' || j.role === 'oj_holder') setRole('super_admin')
@@ -121,7 +124,8 @@ export default function AdminPage() {
       method: 'POST',
       body: JSON.stringify({ password: pass }),
     })
-    console.debug('[admin/debug] Login response:', r.status, r.statusText)
+    const debugHeader = r.headers.get('x-debug')
+    console.debug('[admin/debug] Login response:', r.status, r.statusText, 'debug:', debugHeader)
     if (!r.ok) {
       let msg = 'Incorrect password'
       try {
@@ -133,8 +137,7 @@ export default function AdminPage() {
       } catch (e) {
         console.debug('[admin/debug] Failed to parse error response:', e)
       }
-      const hdr = r.headers.get('x-debug')
-      if (hdr) msg += ` (${hdr})`
+      if (debugHeader) msg += ` (${debugHeader})`
       setLoginMsg(msg)
       return
     }
