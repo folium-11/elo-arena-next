@@ -163,7 +163,6 @@ export async function readState(): Promise<State> {
       readPromise = null
     }
   })()
-
   return readPromise
 }
 
