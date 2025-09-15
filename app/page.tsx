@@ -133,7 +133,9 @@ export default function Home() {
   const busyRef = useRef(false)
 
   const canVote = (!signInEnabled || signedIn) && !!pair && !busy
-  useEffect(() => { canVoteRef.current = (!signInEnabled || signedIn) && !!pairRef.current && !busyRef.current }, [signInEnabled, signedIn, pair, busy])
+  useEffect(() => {
+    canVoteRef.current = (!signInEnabled || signedIn) && !!pair && !busy
+  }, [signInEnabled, signedIn, pair, busy])
   useEffect(() => { pairRef.current = pair }, [pair])
   useEffect(() => { busyRef.current = busy }, [busy])
 
