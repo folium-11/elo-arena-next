@@ -5,9 +5,9 @@ import { readState, writeState } from '@/lib/state'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const g = requireRoles(req, ['admin', 'super_admin'])
+  const g = await requireRoles(req, ['admin', 'super_admin'])
   if ('error' in g) return g.error
-  const s = readState()
+  const s = await readState()
   let names: string[] = []
   try {
     const b = await req.json()
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     keep[id] = v
   })
   s.activeSessions = keep
-  writeState(s)
+  await writeState(s)
   const after = Object.keys(s.activeSessions || {}).length
   return json({ ok: true, cleared: Math.max(0, before - after) })
 }

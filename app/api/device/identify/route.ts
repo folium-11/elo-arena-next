@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   const { bucketId, deviceId } = deriveIds(sig)
 
-  const s = readState()
+  const s = await readState()
   s.deviceBuckets = s.deviceBuckets || {}
   s.deviceRecords = s.deviceRecords || {}
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     s.deviceBuckets[bucketId] = Array.from(new Set([...(s.deviceBuckets[bucketId] || []), deviceId]))
   }
 
-  writeState(s)
+  await writeState(s)
   const secure = process.env.NODE_ENV !== 'development'
   cookies().set('did', chosen, {
     httpOnly: true,

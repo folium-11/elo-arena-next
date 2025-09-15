@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (error) return error
   if (role === 'none') return new NextResponse('unauthorized', { status: 401 })
   
-  const s = readState()
+  const s = await readState()
   let enabled = false
   try {
     const b = await req.json()
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse('bad_payload', { status: 400 })
   }
   s.signInEnabled = !!enabled
-  writeState(s)
+  await writeState(s)
   return Response.json({ ok: true, enabled: s.signInEnabled })
 }
 

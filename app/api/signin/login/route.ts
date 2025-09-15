@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const s = readState()
+  const s = await readState()
   if (!s.signInEnabled) return new NextResponse('sign_in_disabled', { status: 400 })
 
   const did = cookies().get('did')?.value
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   s.activeSessions = s.activeSessions || {}
   s.activeSessions[did] = { name, since: new Date().toISOString() }
-  writeState(s)
+  await writeState(s)
 
   return NextResponse.json({ ok: true, name })
 }
