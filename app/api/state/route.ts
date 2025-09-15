@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { readState } from '@/lib/state'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET() {
   const s = readState()
@@ -13,7 +15,7 @@ export async function GET() {
     return o ? { ...it, name: o } : it
   })
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     ...s,
     items,
     debug: process.env.NODE_ENV !== 'production' ? { envSet: {
@@ -22,4 +24,6 @@ export async function GET() {
       SESSION_SECRET: !!process.env.SESSION_SECRET || !!process.env.NEXTAUTH_SECRET,
     }} : undefined,
   })
+  res.headers.set('Cache-Control', 'no-store, private, max-age=0')
+  return res
 }
