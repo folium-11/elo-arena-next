@@ -100,6 +100,7 @@ export async function readState(): Promise<State> {
   }
 
   if (cachedState) return cachedState
+
   ensureDirs()
   if (!fs.existsSync(dataPath)) {
     const s = defaultState()
