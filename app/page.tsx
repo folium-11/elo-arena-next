@@ -91,15 +91,17 @@ function normalizeHomePayload(data: any): HomePayload {
   }
 
   const globalRows: GlobalRow[] = Array.isArray(data?.globalRows)
-    ? data.globalRows.map((row: any, index: number) => ({
-        rank: Number(row?.rank ?? index + 1),
-        id: String(row?.id || ''),
-        name: String(row?.name || ''),
-        rating: Number(row?.rating ?? 0),
-        w: Number(row?.w ?? 0),
-        l: Number(row?.l ?? 0),
-        wp: Number(row?.wp ?? 0),
-      })).filter((row) => row.id && row.name)
+    ? data.globalRows
+        .map((row: any, index: number): GlobalRow => ({
+          rank: Number(row?.rank ?? index + 1),
+          id: String(row?.id || ''),
+          name: String(row?.name || ''),
+          rating: Number(row?.rating ?? 0),
+          w: Number(row?.w ?? 0),
+          l: Number(row?.l ?? 0),
+          wp: Number(row?.wp ?? 0),
+        }))
+        .filter((row: GlobalRow) => !!row.id && !!row.name)
     : []
 
   const signInEnabled = !!data?.signInEnabled
@@ -115,13 +117,13 @@ function normalizeHomePayload(data: any): HomePayload {
   const personalRows: PersonalRow[] =
     personalMode === 'signedIn' && Array.isArray(data?.personalRows)
       ? data.personalRows
-          .map((row: any, index: number) => ({
+          .map((row: any, index: number): PersonalRow => ({
             rank: Number(row?.rank ?? index + 1),
             id: String(row?.id || ''),
             name: String(row?.name || ''),
             rating: Number(row?.rating ?? 0),
           }))
-          .filter((row) => row.id && row.name)
+          .filter((row: PersonalRow) => !!row.id && !!row.name)
       : []
 
   return {
