@@ -7,7 +7,7 @@ const K = 32
 function expected(a: number, b: number) { return 1 / (1 + Math.pow(10, (b - a) / 400)) }
 
 export async function POST(req: NextRequest) {
-  const s = readState()
+  const s = await readState()
   const body = await req.json().catch(() => null)
   const did = cookies().get('did')?.value || null
 
@@ -51,6 +51,6 @@ export async function POST(req: NextRequest) {
     s.currentPairByDevice[did] = [items[i].id, items[j].id]
   }
 
-  writeState(s)
+  await writeState(s)
   return NextResponse.json({ ok: true })
 }

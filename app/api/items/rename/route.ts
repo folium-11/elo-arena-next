@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (error) return error
   if (role === 'none') return new NextResponse('unauthorized', { status: 401 })
 
-  const s = readState()
+  const s = await readState()
 
   let id = ''
   let name = ''
@@ -30,6 +30,6 @@ export async function POST(req: NextRequest) {
   it.name = name
   s.nameOverrides = s.nameOverrides || {}
   s.nameOverrides[id] = name
-  writeState(s)
+  await writeState(s)
   return Response.json({ ok: true, id, name })
 }

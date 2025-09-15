@@ -5,9 +5,9 @@ import { readState, writeState } from '@/lib/state'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const g = requireRoles(req, ['admin', 'super_admin'])
+  const g = await requireRoles(req, ['admin', 'super_admin'])
   if ('error' in g) return g.error
-  const s = readState()
+  const s = await readState()
   let name = ''
   let extra = 0
   try {
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!name) return json('bad_name', { status: 400 })
   s.extraSlots = s.extraSlots || {}
   s.extraSlots[name] = extra
-  writeState(s)
+  await writeState(s)
   return json({ ok: true, name, extra })
 }
 

@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 export const runtime = 'nodejs'
 
 export async function GET() {
-  const s = readState()
+  const s = await readState()
   const enabled = !!s.signInEnabled
   const did = cookies().get('did')?.value || undefined
 

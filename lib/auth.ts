@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { cookies, headers } from 'next/headers'
-import { readState } from '@/lib/state'
+import { readState, writeState } from '@/lib/state'
 import { NextRequest, NextResponse } from 'next/server'
 
 export type Role = 'admin' | 'super_admin'
@@ -108,8 +108,8 @@ export function decodeSession(token: string | undefined): ServerSession | undefi
   }
 }
 
-export function getSessionFromState(sid: string | undefined) {
-  const s = readState()
+export async function getSessionFromState(sid: string | undefined) {
+  const s = await readState()
   const sess = decodeSession(sid)
   return { s, session: sess }
 }
@@ -186,9 +186,9 @@ export function destroySession() {
   })
 }
 
-export function currentSession() {
+export async function currentSession() {
   const sid = cookies().get('sid')?.value
-  const { s, session } = getSessionFromState(sid)
+  const { s, session } = await getSessionFromState(sid)
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[auth/debug] currentSession:', {
       hasSid: !!sid,
@@ -240,11 +240,12 @@ export function needsStepUp(sess?: ServerSession) {
   return age > STEP_UP_WINDOW_MIN * 60 * 1000
 }
 
-export function markStepUpNow(sess: ServerSession) {
-  const s = readState()
+export async function markStepUpNow(sess: ServerSession) {
+  const s = await readState()
   const found: ServerSession | undefined = s.serverSessions?.[sess.id]
   if (found) {
     found.stepUpAt = new Date().toISOString()
+    await writeState(s)
     touchAndPersistSession(s, found)
   }
 }
@@ -261,12 +262,12 @@ export function stepUpRequired() {
   return new NextResponse('step_up_required', { status: 412 })
 }
 
-export function requireRoles(
+export async function requireRoles(
   req: NextRequest,
   allowed: Array<Role>,
   opts?: { csrf?: boolean }
 ) {
-  const { s, session } = currentSession()
+  const { s, session } = await currentSession()
   if (!session) return { error: new NextResponse('unauthorized', { status: 401 }) }
 
   const base = session.roles.some((r) => allowed.includes(r))
