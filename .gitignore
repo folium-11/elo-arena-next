@@ -9,7 +9,6 @@ node_modules/
 # Local data & uploads
 uploads/
 public/uploads/
-app/data/state.json
 
 # Logs
 *.log

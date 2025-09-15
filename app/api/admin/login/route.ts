@@ -93,7 +93,9 @@ export async function POST(req: NextRequest) {
       expAt: sess.expAt,
       createdAt: sess.createdAt,
       nodeEnv: process.env.NODE_ENV,
-      vercelEnv: process.env.VERCEL
+      vercelEnv: process.env.VERCEL,
+      hasSessionSecret: !!(process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET),
+      sessionSecretLength: (process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || '').length
     })
   }
 

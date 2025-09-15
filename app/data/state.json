@@ -1,0 +1,71 @@
+{
+  "arenaTitle": "Arena",
+  "items": [],
+  "globalRatings": {},
+  "perUserRatings": {},
+  "wins": {},
+  "appearances": {},
+  "nameOverrides": {},
+  "contributions": {},
+  "allowedNames": [],
+  "slotLimits": {},
+  "extraSlots": {},
+  "activeSessions": {},
+  "signInEnabled": false,
+  "activePairs": {},
+  "deviceBuckets": {
+    "df3f5896a5eef146caa39757170d66b6ed0764545e8dadb8ec38d58130d25714": [
+      "bf4f5dccb88ed4a299e162f2e7ba726d5fe806c069c9ef7d80e540f15677092f"
+    ]
+  },
+  "deviceRecords": {
+    "bf4f5dccb88ed4a299e162f2e7ba726d5fe806c069c9ef7d80e540f15677092f": {
+      "deviceId": "bf4f5dccb88ed4a299e162f2e7ba726d5fe806c069c9ef7d80e540f15677092f",
+      "bucketId": "df3f5896a5eef146caa39757170d66b6ed0764545e8dadb8ec38d58130d25714",
+      "sig": {
+        "ua": {
+          "brands": [
+            {
+              "brand": "Chromium",
+              "version": "140"
+            },
+            {
+              "brand": "Not=A?Brand",
+              "version": "24"
+            },
+            {
+              "brand": "Google Chrome",
+              "version": "140"
+            }
+          ],
+          "mobile": false,
+          "platform": "macOS"
+        },
+        "tz": "Australia/Sydney",
+        "lang": "en-US",
+        "screen": {
+          "width": 1800,
+          "height": 1169,
+          "colorDepth": 30,
+          "dpr": 2
+        },
+        "webgl": {
+          "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+          "vendor": "Google Inc. (Apple)"
+        },
+        "canvas": {
+          "hash": "9274f3d13597fd7741258a4ca53a167b62cbd23fec24d94bbffa173129321110"
+        },
+        "audio": {
+          "hash": "9e1be584c0fd28f1ae973b456c9647ef76dd122cfd7afc6b86cb109669f8a93b"
+        }
+      },
+      "createdAt": "2025-09-15T05:55:39.364Z",
+      "lastSeen": "2025-09-15T05:55:39.365Z",
+      "usageCount": 2
+    }
+  },
+  "personalRatingsByDevice": {},
+  "currentPairByDevice": {},
+  "serverSessions": {}
+}
