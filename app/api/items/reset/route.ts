@@ -11,8 +11,6 @@ export async function POST(req: NextRequest) {
   let id = ''
   try { id = String((await req.json())?.id || '').trim() } catch { return json('bad_payload', { status: 400 }) }
   if (!id) return json('bad_input', { status: 400 })
-
-  // Reset ratings and stats for the item
   s.globalRatings[id] = 1500
   s.wins[id] = 0
   s.appearances[id] = 0

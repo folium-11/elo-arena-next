@@ -19,7 +19,6 @@ export default function ThemeToggle() {
   }, [])
 
   function handleToggle() {
-    // 2) inject wipe CSS for this one transition
     const css = `
       @supports (view-transition-name: root) {
         ::view-transition-old(root) { animation: none; }
@@ -35,7 +34,6 @@ export default function ThemeToggle() {
     if (!style.isConnected) document.head.appendChild(style)
     const cleanup = () => setTimeout(() => { try { style.remove() } catch {} }, 600)
 
-    // 1) flip theme inside a View Transition
     const flip = () => {
       const next: Theme = theme === 'dark' ? 'light' : 'dark'
       setTheme(next)
@@ -47,7 +45,6 @@ export default function ThemeToggle() {
     if ('startViewTransition' in document) {
       (document as any).startViewTransition(flip).finished.finally(cleanup)
     } else {
-      // 4) graceful fallback (no wipe)
       flip()
       cleanup()
     }

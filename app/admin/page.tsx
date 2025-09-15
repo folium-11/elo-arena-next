@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Card from '@/components/Card'
 import { Section } from '@/components/Section'
 import { useDialog } from '@/components/DialogProvider'
@@ -52,7 +52,7 @@ export default function AdminPage() {
     }
   }
 
-  async function whoami() {
+  const whoami = useCallback(async () => {
     try {
       const r = await fetch('/api/admin/status/', { cache: 'no-store' })
       const debugHeader = r.headers.get('x-debug')
@@ -73,9 +73,9 @@ export default function AdminPage() {
       console.debug('[admin/debug] whoami error:', e)
     }
     setRole('none')
-  }
+  }, [])
 
-  async function refreshState() {
+  const refreshState = useCallback(async () => {
     const r = await fetch('/api/state/', { cache: 'no-store' })
     if (!r.ok) return
     const s = await r.json()
@@ -94,26 +94,20 @@ export default function AdminPage() {
       .map(([id, v]: any) => ({ id, name: v?.name || '', since: v?.since || '' }))
       .filter((x) => x.name)
     setSessions(sess)
-  }
+  }, [])
 
-  async function refreshOj() { setOjStatus(null) }
+  const refreshOj = useCallback(async () => { setOjStatus(null) }, [])
 
   useEffect(() => {
-    whoami().then(() => {
-      if (role !== 'none') {
-        refreshState()
-        refreshOj()
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    whoami()
+  }, [whoami])
 
   useEffect(() => {
     if (role !== 'none') {
       refreshState()
       refreshOj()
     }
-  }, [role])
+  }, [role, refreshState, refreshOj])
 
   async function login() {
     setLoginMsg(null)
@@ -191,19 +185,19 @@ export default function AdminPage() {
     refreshState()
   }
 
-  async function renameItem(id: string, name: string) {
+  const renameItem = useCallback(async (id: string, name: string) => {
     const newName = name.trim()
     if (!newName) return
     await fetch('/api/items/rename/', { method: 'POST', body: JSON.stringify({ id, name: newName }) })
     refreshState()
-  }
+  }, [refreshState])
 
-  async function removeItem(id: string) {
+  const removeItem = useCallback(async (id: string) => {
     const ok = await dialog.confirm('Remove this item?', 'Confirm removal')
     if (!ok) return
     await fetch('/api/items/remove/', { method: 'POST', body: JSON.stringify({ id }) })
     refreshState()
-  }
+  }, [dialog, refreshState])
 
   async function toggleSignIn(next: boolean) {
     await fetch('/api/signin/enable/', {
@@ -304,7 +298,7 @@ export default function AdminPage() {
         ))}
       </div>
     )
-  }, [items])
+  }, [items, removeItem, renameItem])
 
   if (role === 'none') {
     return (
@@ -316,7 +310,6 @@ export default function AdminPage() {
           }}
           className="mt-12 flex flex-wrap items-start justify-center gap-3"
         >
-          {/* Left pill: input with its own column so error can appear beneath it */}
           <div className="flex min-w-[16rem] flex-col">
             <input
               type="password"
@@ -333,7 +326,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Right pill: button sized to its label only */}
           <button
             className="rounded-full focus-visible:rounded-full border border-border px-6 py-3 text-base hover:border-primary"
           >

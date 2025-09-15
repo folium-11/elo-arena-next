@@ -44,7 +44,6 @@ export async function POST(req: NextRequest) {
     .sign(secret)
 
   const res = NextResponse.json({ ok: true, role })
-  // stateless session cookie; readable only by the server
   cookies().set('sid', token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -52,7 +51,6 @@ export async function POST(req: NextRequest) {
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
   })
-  // also send explicit no-store headers for Vercel/CDN
   res.headers.set('Cache-Control', 'no-store, private, max-age=0')
   return res
 }

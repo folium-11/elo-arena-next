@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tokens */
 :root {
   --bg: #0b0c0f;
   --surface: #111319;
@@ -40,7 +39,6 @@ input, button, textarea, select { @apply outline-none; }
 
  
 
-/* Remove default rings globally, re-enable for focusable controls only */
 @layer base {
   *, *::before, *::after { --tw-ring-shadow: 0 0 #0000; }
 }
@@ -51,7 +49,6 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible { @apply ring-2 ring-border ring-offset-2 ring-offset-bg outline-none }
 
-/* Pill shapes, ample padding, glassy look, and glows */
 @layer base {
   button { @apply rounded-full px-5 py-2.5 border border-border bg-surface backdrop-blur-md shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)] text-sm; }
   input { @apply rounded-full px-4 py-2 border border-border bg-surface backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_6px_20px_rgba(0,0,0,0.15)] text-sm; }
@@ -111,13 +108,9 @@ textarea:focus-visible { @apply ring-2 ring-border ring-offset-2 ring-offset-bg 
     --chart-5: 340 75% 55%;
   }
 }
-
-/* Cards and containers */
 @layer components {
   .card-glass { @apply rounded-3xl border border-border bg-surface backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.35)]; overflow: visible; }
 }
-
-/* Atmospheric background */
 .atmosphere {
   position: fixed;
   inset: 0;

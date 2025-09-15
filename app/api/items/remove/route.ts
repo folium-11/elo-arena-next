@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/jwt-auth'
 import { writeState, readState } from '@/lib/state'
 
@@ -26,7 +26,6 @@ export async function POST(req: NextRequest) {
   delete s.wins[id]
   delete s.appearances[id]
   delete s.nameOverrides?.[id]
-  // prune pairs etc. if present
   writeState(s)
   return Response.json({ ok: true })
 }

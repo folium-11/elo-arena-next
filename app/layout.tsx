@@ -4,8 +4,6 @@ import ThemeToggle from '@/components/ThemeToggle'
 import ScrollKeeper from '@/components/ScrollKeeper'
 import DialogProvider from '@/components/DialogProvider'
 import { Montserrat } from 'next/font/google'
-
-// Self-hosted Montserrat; Next.js downloads at build time and serves locally
 const montserrat = Montserrat({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
