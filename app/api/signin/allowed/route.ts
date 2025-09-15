@@ -5,9 +5,9 @@ import { readState, writeState } from '@/lib/state'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const g = requireRoles(req, ['admin', 'super_admin'])
+  const g = await requireRoles(req, ['admin', 'super_admin'])
   if ('error' in g) return g.error
-  const s = readState()
+  const s = await readState()
   let names: string[] = []
   try {
     const b = await req.json()
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     return json('bad_payload', { status: 400 })
   }
   s.allowedNames = names
-  writeState(s)
+  await writeState(s)
   return json({ ok: true, count: names.length })
 }
 

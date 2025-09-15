@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export async function GET() {
-  const s = readState()
+  const s = await readState()
   const overrides = s.nameOverrides || {}
   const items = (s.items || []).map((it: any) => {
     const o = String(overrides[it.id] ?? '').trim()
