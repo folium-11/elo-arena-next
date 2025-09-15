@@ -30,11 +30,29 @@ export type State = {
 export const dataPath = path.join(process.cwd(), 'app', 'data', 'state.json')
 export const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
 
-function ensureDirs() {
-  if (!fs.existsSync(path.dirname(dataPath))) {
-    fs.mkdirSync(path.dirname(dataPath), { recursive: true })
+const warnedMessages = new Set<string>()
+
+function warnOnce(msg: string, err: unknown) {
+  if (warnedMessages.has(msg)) return
+  warnedMessages.add(msg)
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(msg, err)
   }
-  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+}
+
+function ensureDirs() {
+  try {
+    if (!fs.existsSync(path.dirname(dataPath))) {
+      fs.mkdirSync(path.dirname(dataPath), { recursive: true })
+    }
+  } catch (err) {
+    warnOnce('Failed to ensure data directory, falling back to in-memory state only.', err)
+  }
+  try {
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+  } catch (err) {
+    warnOnce('Failed to ensure uploads directory, falling back to in-memory state only.', err)
+  }
 }
 
 export function defaultState(): State {
@@ -104,11 +122,23 @@ export async function readState(): Promise<State> {
   ensureDirs()
   if (!fs.existsSync(dataPath)) {
     const s = defaultState()
-    fs.writeFileSync(dataPath, JSON.stringify(s, null, 2))
+    try {
+      fs.writeFileSync(dataPath, JSON.stringify(s, null, 2))
+    } catch (err) {
+      warnOnce('Failed to write arena state file, state will be kept in memory only.', err)
+    }
     cachedState = s
     return s
   }
-  cachedState = JSON.parse(fs.readFileSync(dataPath, 'utf-8')) as State
+  try {
+    cachedState = JSON.parse(fs.readFileSync(dataPath, 'utf-8')) as State
+  } catch (err) {
+    warnOnce('Failed to read arena state file, using in-memory cache instead.', err)
+    if (cachedState) return cachedState
+    const fallback = defaultState()
+    cachedState = fallback
+    return fallback
+  }
   return cachedState
 }
 
@@ -134,7 +164,11 @@ export async function writeState(s: State): Promise<void> {
     return
   }
   ensureDirs()
-  fs.writeFileSync(dataPath, JSON.stringify(s, null, 2))
+  try {
+    fs.writeFileSync(dataPath, JSON.stringify(s, null, 2))
+  } catch (err) {
+    warnOnce('Failed to persist arena state to disk, continuing with in-memory state.', err)
+  }
 }
 
 export function kFactor() {
