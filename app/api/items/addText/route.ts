@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (error) return error
   if (role === 'none') return new NextResponse('unauthorized', { status: 401 })
 
-  const s = readState()
+  const s = await readState()
 
   let name = ''
   try {
@@ -27,6 +27,6 @@ export async function POST(req: NextRequest) {
   if (!s.globalRatings[id]) s.globalRatings[id] = 1500
   s.wins[id] = 0
   s.appearances[id] = 0
-  writeState(s)
+  await writeState(s)
   return Response.json({ ok: true, id, name })
 }

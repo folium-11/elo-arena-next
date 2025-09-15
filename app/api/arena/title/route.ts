@@ -11,10 +11,10 @@ export async function POST(req: NextRequest) {
   if (error) return error
   if (role === 'none') return new NextResponse('unauthorized', { status: 401 })
   
-  const s = readState()
+  const s = await readState()
   let title = ''
   try { title = String((await req.json())?.title || '').trim() } catch { return new NextResponse('bad_payload', { status: 400 }) }
   s.arenaTitle = title || 'Arena'
-  writeState(s)
+  await writeState(s)
   return Response.json({ ok: true })
 }

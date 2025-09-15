@@ -13,7 +13,7 @@ function pickPair(items: any[]) {
 }
 
 export async function GET() {
-  const s = readState()
+  const s = await readState()
   const did = cookies().get('did')?.value || null
   const items = s.items || []
   if (items.length < 2) return NextResponse.json({ pair: null })
@@ -32,7 +32,7 @@ export async function GET() {
     pair = picked
     if (did) {
       s.currentPairByDevice[did] = [picked[0].id, picked[1].id]
-      writeState(s)
+      await writeState(s)
     }
   }
 

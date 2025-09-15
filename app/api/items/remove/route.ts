@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   if (error) return error
   if (role === 'none') return new NextResponse('unauthorized', { status: 401 })
   
-  const s = readState()
+  const s = await readState()
 
   let id = ''
   try {
@@ -26,6 +26,6 @@ export async function POST(req: NextRequest) {
   delete s.wins[id]
   delete s.appearances[id]
   delete s.nameOverrides?.[id]
-  writeState(s)
+  await writeState(s)
   return Response.json({ ok: true })
 }
