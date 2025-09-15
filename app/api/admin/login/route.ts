@@ -1,105 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { SignJWT } from 'jose'
 import crypto from 'crypto'
-import { createSession, decodeSession } from '@/lib/auth'
-import { readState } from '@/lib/state'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 function safeEqual(a: string, b: string) {
-  const ab = Buffer.from(a, 'utf8')
-  const bb = Buffer.from(b, 'utf8')
-  // Compare equal-length arrays to avoid timing leaks
-  const pb = new Uint8Array(ab.length)
-  const qb = new Uint8Array(ab.length)
-  pb.set(ab.subarray(0, ab.length))
-  qb.set(bb.subarray(0, Math.min(bb.length, pb.length)))
-  return crypto.timingSafeEqual(pb, qb) && a.length === b.length
+  const A = Buffer.from(a || '', 'utf8')
+  const B = Buffer.from(b || '', 'utf8')
+  if (A.length !== B.length) return false
+  return crypto.timingSafeEqual(A, B)
 }
 
 export async function POST(req: NextRequest) {
   const { password = '' } = await req.json().catch(() => ({ password: '' }))
-  const adminEnv = process.env.ADMIN_PASSWORD || ''
   const superEnv = process.env.SUPER_ADMIN_PASSWORD || ''
-
-  // Debug logging for Vercel
-  if (process.env.NODE_ENV !== 'production') {
-    console.debug('[admin/login/debug] Environment check:', {
-      hasAdminEnv: !!adminEnv,
-      hasSuperEnv: !!superEnv,
-      adminEnvLength: adminEnv?.length || 0,
-      superEnvLength: superEnv?.length || 0,
-      passwordLength: password?.length || 0
-    })
-  }
-
-  if (!adminEnv && !superEnv) {
-    const res = NextResponse.json({ error: 'env_missing', message: 'Admin passwords are not configured' }, { status: 500 })
-    res.headers.set('x-debug', 'env_missing')
-    return res
-  }
+  const adminEnv = process.env.ADMIN_PASSWORD || ''
+  const secure = process.env.NODE_ENV === 'production'
 
   let role: 'admin' | 'super_admin' | null = null
-  if (superEnv && safeEqual(password, superEnv)) {
-    role = 'super_admin'
+  if (superEnv && safeEqual(password, superEnv)) role = 'super_admin'
+  else if (adminEnv && safeEqual(password, adminEnv)) role = 'admin'
+  if (!role) return new NextResponse('invalid', { status: 401 })
+
+  const secret = new TextEncoder().encode(process.env.AUTH_SECRET || '')
+  if (!process.env.AUTH_SECRET) {
     if (process.env.NODE_ENV !== 'production') {
-      console.debug('[admin/login/debug] Super admin password matched')
+      console.debug('[admin/login/debug] AUTH_SECRET not set')
     }
-  } else if (adminEnv && safeEqual(password, adminEnv)) {
-    role = 'admin'
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[admin/login/debug] Admin password matched')
-    }
-  } else {
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[admin/login/debug] No password matched')
-    }
+    return new NextResponse('AUTH_SECRET not configured', { status: 500 })
   }
-
-  if (!role) {
-    const res = NextResponse.json({ error: 'wrong_password', message: 'Incorrect password' }, { status: 401 })
-    res.headers.set('x-debug', 'wrong_password')
-    return res
-  }
-
-  // Enforce single active Super Admin session (check current session)
-  if (role === 'super_admin') {
-    const currentSid = cookies().get('sid')?.value
-    if (currentSid) {
-      // Check if current session is already super admin
-      const currentSession = decodeSession(currentSid)
-      if (currentSession && currentSession.roles.includes('super_admin')) {
-        // Already super admin, allow login
-        if (process.env.NODE_ENV !== 'production') {
-          console.debug('[admin/login/debug] Already super admin, allowing login')
-        }
-      } else {
-        // Someone else might be super admin, but we can't check stateless sessions
-        // For now, allow multiple super admin sessions (can be restricted later if needed)
-        if (process.env.NODE_ENV !== 'production') {
-          console.debug('[admin/login/debug] No existing super admin session found, allowing login')
-        }
-      }
-    }
-  }
-
-  // Establish a server-side session used by protected routes and CSRF
-  const sess = createSession([role])
-
+  
   if (process.env.NODE_ENV !== 'production') {
-    console.debug('[admin/login/debug] Created session:', { 
-      id: sess.id, 
-      roles: sess.roles,
-      expAt: sess.expAt,
-      createdAt: sess.createdAt,
-      nodeEnv: process.env.NODE_ENV,
-      vercelEnv: process.env.VERCEL,
-      hasSessionSecret: !!(process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET),
-      sessionSecretLength: (process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || '').length
-    })
+    console.debug('[admin/login/debug] Creating JWT for role:', role)
   }
+  
+  const token = await new SignJWT({ role })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(secret)
 
-  const response = NextResponse.json({ ok: true, role, csrf: sess.csrfSecret })
-  response.headers.set('x-debug', 'session_created')
-  return response
+  const res = NextResponse.json({ ok: true, role })
+  // stateless session cookie; readable only by the server
+  cookies().set('sid', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+  })
+  // also send explicit no-store headers for Vercel/CDN
+  res.headers.set('Cache-Control', 'no-store, private, max-age=0')
+  return res
 }

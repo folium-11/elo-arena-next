@@ -1,14 +1,18 @@
 import { NextRequest } from 'next/server'
-import { json, requireRoles } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/jwt-auth'
 import { readState, writeState, uploadsDir } from '@/lib/state'
 import fs from 'fs'
 import path from 'path'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function POST(req: NextRequest) {
-  const g = requireRoles(req, ['admin', 'super_admin'])
-  if ('error' in g) return g.error
+  const { role, error } = await getCurrentUser()
+  if (error) return error
+  if (role === 'none') return new NextResponse('unauthorized', { status: 401 })
+  
   const s = readState()
 
   const form = await req.formData()
@@ -37,5 +41,5 @@ export async function POST(req: NextRequest) {
   }
 
   writeState(s)
-  return json({ ok: true })
+  return Response.json({ ok: true })
 }

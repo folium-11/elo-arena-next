@@ -1,21 +1,25 @@
 import { NextRequest } from 'next/server'
-import { json, requireRoles } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/jwt-auth'
 import { writeState, readState } from '@/lib/state'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function POST(req: NextRequest) {
-  const g = requireRoles(req, ['admin', 'super_admin'])
-  if ('error' in g) return g.error
+  const { role, error } = await getCurrentUser()
+  if (error) return error
+  if (role === 'none') return new NextResponse('unauthorized', { status: 401 })
+  
   const s = readState()
 
   let id = ''
   try {
     id = String((await req.json())?.id || '').trim()
   } catch {
-    return json('bad_payload', { status: 400 })
+    return new NextResponse('bad_payload', { status: 400 })
   }
-  if (!id) return json('bad_input', { status: 400 })
+  if (!id) return new NextResponse('bad_input', { status: 400 })
 
   s.items = (s.items || []).filter((x: any) => x.id !== id)
   delete s.globalRatings[id]
@@ -24,5 +28,5 @@ export async function POST(req: NextRequest) {
   delete s.nameOverrides?.[id]
   // prune pairs etc. if present
   writeState(s)
-  return json({ ok: true })
+  return Response.json({ ok: true })
 }

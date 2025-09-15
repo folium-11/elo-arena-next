@@ -37,22 +37,8 @@ function clientHints() {
 // Stateless, signed cookie session (no filesystem store)
 function getSessionSecret() {
   const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || ''
-  // Use a consistent fallback secret that works across all environments
-  // This ensures sessions work consistently between local and Vercel deployments
-  const fallbackSecret = 'elo-arena-session-secret-fallback-2024'
-  
-  if (process.env.NODE_ENV !== 'production') {
-    console.debug('[auth/debug] Session secret check:', {
-      hasEnvSecret: !!secret,
-      secretLength: secret.length,
-      usingFallback: !secret,
-      fallbackLength: fallbackSecret.length,
-      nodeEnv: process.env.NODE_ENV,
-      vercelEnv: process.env.VERCEL
-    })
-  }
-  
-  return secret || fallbackSecret
+  // In production we should have a real secret configured
+  return secret || 'dev-insecure-secret'
 }
 
 function b64url(input: string | Buffer) {
@@ -102,11 +88,7 @@ export function decodeSession(token: string | undefined): ServerSession | undefi
       console.debug('[auth/debug] Token signature verification failed:', {
         expected: expectedSig,
         received: sig,
-        payloadLength: payload.length,
-        hasSessionSecret: !!(process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET),
-        sessionSecretLength: (process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || '').length,
-        nodeEnv: process.env.NODE_ENV,
-        vercelEnv: process.env.VERCEL
+        payloadLength: payload.length
       })
     }
     return undefined
@@ -228,9 +210,7 @@ export function currentSession() {
       now: new Date().toISOString(),
       isExpired: session ? new Date(session.expAt).getTime() <= Date.now() : 'N/A',
       nodeEnv: process.env.NODE_ENV,
-      vercelEnv: process.env.VERCEL,
-      hasSessionSecret: !!(process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET),
-      sessionSecretLength: (process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || '').length
+      vercelEnv: process.env.VERCEL
     })
   }
   

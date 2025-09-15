@@ -1,10 +1,10 @@
-import { json, currentSession } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/jwt-auth'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET() {
-  const { s, session } = currentSession()
-  if (!session) return json({ role: 'none' as const })
-  const role = session.roles.includes('super_admin') ? 'super_admin' : 'admin'
-  return json({ role, csrfToken: session.csrfSecret })
+  const { role } = await getCurrentUser()
+  return Response.json({ role })
 }

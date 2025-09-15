@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies, headers } from 'next/headers'
-import { currentSession, decodeSession } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/jwt-auth'
 
 export async function GET(req: NextRequest) {
   // Only allow in non-production
@@ -9,8 +9,7 @@ export async function GET(req: NextRequest) {
   }
 
   const sid = cookies().get('sid')?.value
-  const { session } = currentSession()
-  const decodedSession = decodeSession(sid)
+  const { role } = await getCurrentUser()
   const h = headers()
   
   const debug = {
@@ -18,9 +17,10 @@ export async function GET(req: NextRequest) {
       NODE_ENV: process.env.NODE_ENV,
       hasAdminPassword: !!process.env.ADMIN_PASSWORD,
       hasSuperAdminPassword: !!process.env.SUPER_ADMIN_PASSWORD,
-      hasSessionSecret: !!(process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET),
+      hasAuthSecret: !!process.env.AUTH_SECRET,
       adminPasswordLength: process.env.ADMIN_PASSWORD?.length || 0,
       superAdminPasswordLength: process.env.SUPER_ADMIN_PASSWORD?.length || 0,
+      authSecretLength: process.env.AUTH_SECRET?.length || 0,
     },
     cookies: {
       hasSid: !!sid,
@@ -28,18 +28,8 @@ export async function GET(req: NextRequest) {
       sidPreview: sid ? sid.substring(0, 20) + '...' : null,
     },
     session: {
-      hasSession: !!session,
-      sessionId: session?.id,
-      sessionRoles: session?.roles,
-      sessionExpAt: session?.expAt,
-      sessionCreatedAt: session?.createdAt,
-      sessionLastSeen: session?.lastSeen,
-    },
-    decodedSession: {
-      hasDecodedSession: !!decodedSession,
-      decodedId: decodedSession?.id,
-      decodedRoles: decodedSession?.roles,
-      decodedExpAt: decodedSession?.expAt,
+      role: role,
+      hasValidSession: role !== 'none',
     },
     headers: {
       userAgent: h.get('user-agent')?.substring(0, 50) + '...',

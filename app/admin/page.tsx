@@ -16,7 +16,6 @@ export default function AdminPage() {
   const [loginMsg, setLoginMsg] = useState<string | null>(null)
 
   const [title, setTitle] = useState('Arena')
-  const [csrf, setCsrf] = useState<string | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [uploadBusy, setUploadBusy] = useState(false)
   const [uploadNote, setUploadNote] = useState('')
@@ -61,10 +60,9 @@ export default function AdminPage() {
       
       if (r.ok) {
         const j = await r.json()
-        if (j.role === 'super_admin' || j.role === 'oj_holder') setRole('super_admin')
+        if (j.role === 'super_admin') setRole('super_admin')
         else if (j.role === 'admin') setRole('admin')
         else setRole('none')
-        if (j.csrf) setCsrf(String(j.csrf))
         if (j.debug?.expAt) console.debug('[admin/debug] session expAt', j.debug.expAt)
         console.debug('[admin/debug] whoami response:', j)
         return
@@ -146,14 +144,13 @@ export default function AdminPage() {
     if (j.role === 'admin') {
       setRole('admin')
       setLoginMsg('Admin access granted.')
-    } else if (j.role === 'super_admin' || j.role === 'oj_holder') {
+    } else if (j.role === 'super_admin') {
       setRole('super_admin')
       setLoginMsg('Super Admin access granted.')
     } else {
       setRole('none')
       setLoginMsg('Incorrect password')
     }
-    if (j.csrf) setCsrf(String(j.csrf))
     setPass('')
   }
 
@@ -162,13 +159,12 @@ export default function AdminPage() {
       await fetch('/api/admin/logout/', { method: 'POST' })
     } catch {}
     setRole('none')
-    setCsrf(null)
     setLoginMsg('Signed out.')
   }
 
   async function saveTitle() {
     setSaveTitleBusy(true)
-    await fetch('/api/arena/title/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ title }) })
+    await fetch('/api/arena/title/', { method: 'POST', body: JSON.stringify({ title }) })
     setSaveTitleBusy(false)
     refreshState()
   }
@@ -180,7 +176,7 @@ export default function AdminPage() {
     setUploadNote(`Uploading ${files.length} ${fileWord}…`)
     const fd = new FormData()
     Array.from(files).forEach((f) => fd.append('files', f))
-    const r = await fetch('/api/items/upload/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: fd })
+    const r = await fetch('/api/items/upload/', { method: 'POST', body: fd })
     if (!r.ok) setUploadNote('Upload failed')
     else setUploadNote('Upload complete')
     setUploadBusy(false)
@@ -190,7 +186,7 @@ export default function AdminPage() {
   async function addText() {
     const name = textName.trim()
     if (!name) return
-    await fetch('/api/items/addText/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ name }) })
+    await fetch('/api/items/addText/', { method: 'POST', body: JSON.stringify({ name }) })
     setTextName('')
     refreshState()
   }
@@ -198,21 +194,20 @@ export default function AdminPage() {
   async function renameItem(id: string, name: string) {
     const newName = name.trim()
     if (!newName) return
-    await fetch('/api/items/rename/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ id, name: newName }) })
+    await fetch('/api/items/rename/', { method: 'POST', body: JSON.stringify({ id, name: newName }) })
     refreshState()
   }
 
   async function removeItem(id: string) {
     const ok = await dialog.confirm('Remove this item?', 'Confirm removal')
     if (!ok) return
-    await fetch('/api/items/remove/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ id }) })
+    await fetch('/api/items/remove/', { method: 'POST', body: JSON.stringify({ id }) })
     refreshState()
   }
 
   async function toggleSignIn(next: boolean) {
     await fetch('/api/signin/enable/', {
       method: 'POST',
-      headers: csrf ? { 'x-csrf': csrf } : undefined,
       body: JSON.stringify({ enabled: next }),
     })
     refreshState()
@@ -225,14 +220,13 @@ export default function AdminPage() {
       .filter(Boolean)
     await fetch('/api/signin/allowed/', {
       method: 'POST',
-      headers: csrf ? { 'x-csrf': csrf } : undefined,
       body: JSON.stringify({ names }),
     })
     refreshState()
   }
 
   async function saveExtra(name: string, extra: number) {
-    await fetch('/api/signin/extra/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ name, extra }) })
+    await fetch('/api/signin/extra/', { method: 'POST', body: JSON.stringify({ name, extra }) })
     refreshState()
   }
 
@@ -244,7 +238,7 @@ export default function AdminPage() {
     const noun = names.length === 1 ? 'name' : 'names'
     const ok = await dialog.confirm(`Sign out ${names.length} ${noun}?`, 'Confirm sign-out')
     if (!ok) return
-    await fetch('/api/signin/forceSignout/', { method: 'POST', headers: csrf ? { 'x-csrf': csrf } : undefined, body: JSON.stringify({ names }) })
+    await fetch('/api/signin/forceSignout/', { method: 'POST', body: JSON.stringify({ names }) })
     setSelectedNames({})
     refreshState()
   }
