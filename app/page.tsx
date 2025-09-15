@@ -240,8 +240,8 @@ export default function Home() {
   function renderItem(it: Item | null) {
     if (!it) return null
     return (
-      <div className="flex flex-col items-center gap-3">
-        {it.imageUrl ? <img src={it.imageUrl} alt={it.name} className="rounded-xl max-h-[360px]" /> : null}
+      <div className="flex flex-col items-center gap-4">
+        {it.imageUrl ? <img src={it.imageUrl} alt={it.name} className="rounded-xl max-h-[320px]" /> : null}
         <div className="text-sm text-text">{it.name}</div>
       </div>
     )
@@ -311,9 +311,9 @@ export default function Home() {
         </Card>
       ) : (
         <Card>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-start gap-6 p-6">
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex items-center justify-center md:h-[360px] w-full">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-start gap-6 px-6 py-8">
+            <div className="flex flex-col items-center gap-6">
+              <div className="flex items-center justify-center md:h-[400px] w-full">
                 {renderItem(pair ? pair[0] : null)}
               </div>
               <button
@@ -325,9 +325,9 @@ export default function Home() {
                 {(!signInEnabled || signedIn) ? 'Choose Left (←)' : 'Sign in to vote'}
               </button>
             </div>
-            <div className="flex items-center justify-center text-subtext text-sm md:px-4 md:h-[360px] text-center">vs</div>
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex items-center justify-center md:h-[360px] w-full">
+            <div className="flex items-center justify-center text-subtext text-sm md:px-4 md:h-[400px] text-center">vs</div>
+            <div className="flex flex-col items-center gap-6">
+              <div className="flex items-center justify-center md:h-[400px] w-full">
                 {renderItem(pair ? pair[1] : null)}
               </div>
               <button
