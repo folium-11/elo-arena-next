@@ -1,5 +1,5 @@
-import fs from 'fs'
 import path from 'path'
+import { promises as fsp } from 'fs'
 import { BlobNotFoundError, head, put } from '@vercel/blob'
 
 export type Item = { id: string; name: string; imageUrl?: string | null }
@@ -30,11 +30,27 @@ export type State = {
 export const dataPath = path.join(process.cwd(), 'app', 'data', 'state.json')
 export const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
 
-function ensureDirs() {
-  if (!fs.existsSync(path.dirname(dataPath))) {
-    fs.mkdirSync(path.dirname(dataPath), { recursive: true })
+const warnedMessages = new Set<string>()
+
+function warnOnce(msg: string, err: unknown) {
+  if (warnedMessages.has(msg)) return
+  warnedMessages.add(msg)
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(msg, err)
   }
-  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+}
+
+async function ensureDirs() {
+  try {
+    await fsp.mkdir(path.dirname(dataPath), { recursive: true })
+  } catch (err) {
+    warnOnce('Failed to ensure data directory, falling back to in-memory state only.', err)
+  }
+  try {
+    await fsp.mkdir(uploadsDir, { recursive: true })
+  } catch (err) {
+    warnOnce('Failed to ensure uploads directory, falling back to in-memory state only.', err)
+  }
 }
 
 export function defaultState(): State {
@@ -65,56 +81,96 @@ let cachedState: State | null = null
 let cachedUploadedAt: string | null = null
 const blobToken = process.env.BLOB_READ_WRITE_TOKEN
 const useBlob = !!blobToken
+const BLOB_CACHE_MS = 2000
+let readPromise: Promise<State> | null = null
+let lastBlobCheck = 0
 
 export async function readState(): Promise<State> {
   if (useBlob) {
-    try {
-      const meta = await head('state.json', { token: blobToken })
-      const uploadedAt = meta.uploadedAt.toISOString()
-      if (cachedState && cachedUploadedAt === uploadedAt) {
-        return cachedState
-      }
-
-      const res = await fetch(meta.downloadUrl || meta.url, { cache: 'no-store' })
-      if (!res.ok) throw new Error(`Failed to fetch state blob: ${res.status}`)
-      const text = await res.text()
-      cachedState = JSON.parse(text) as State
-      cachedUploadedAt = uploadedAt
+    if (cachedState && Date.now() - lastBlobCheck < BLOB_CACHE_MS) {
       return cachedState
-    } catch (err) {
-      if (err instanceof BlobNotFoundError || (err as any)?.name === 'BlobNotFoundError') {
-        const fresh = defaultState()
-        cachedState = fresh
-        cachedUploadedAt = null
-        return fresh
-      }
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('Failed to read arena state from blob, using cached/default state', err)
-      }
-      if (cachedState) return cachedState
-      const fallback = defaultState()
-      cachedState = fallback
-      cachedUploadedAt = null
-      return fallback
     }
+    if (readPromise) return readPromise
+    readPromise = (async () => {
+      try {
+        const meta = await head('state.json', { token: blobToken })
+        const uploadedAt = meta.uploadedAt.toISOString()
+        if (cachedState && cachedUploadedAt === uploadedAt) {
+          lastBlobCheck = Date.now()
+          return cachedState
+        }
+
+        const res = await fetch(meta.downloadUrl || meta.url, { cache: 'no-store' })
+        if (!res.ok) throw new Error(`Failed to fetch state blob: ${res.status}`)
+        const text = await res.text()
+        cachedState = JSON.parse(text) as State
+        cachedUploadedAt = uploadedAt
+        lastBlobCheck = Date.now()
+        return cachedState
+      } catch (err) {
+        if (err instanceof BlobNotFoundError || (err as any)?.name === 'BlobNotFoundError') {
+          const fresh = defaultState()
+          cachedState = fresh
+          cachedUploadedAt = null
+          lastBlobCheck = Date.now()
+          return fresh
+        }
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Failed to read arena state from blob, using cached/default state', err)
+        }
+        if (cachedState) {
+          lastBlobCheck = Date.now()
+          return cachedState
+        }
+        const fallback = defaultState()
+        cachedState = fallback
+        cachedUploadedAt = null
+        lastBlobCheck = Date.now()
+        return fallback
+      } finally {
+        readPromise = null
+      }
+    })()
+    return readPromise
   }
 
   if (cachedState) return cachedState
+  if (readPromise) return readPromise
 
-  ensureDirs()
-  if (!fs.existsSync(dataPath)) {
-    const s = defaultState()
-    fs.writeFileSync(dataPath, JSON.stringify(s, null, 2))
-    cachedState = s
-    return s
-  }
-  cachedState = JSON.parse(fs.readFileSync(dataPath, 'utf-8')) as State
-  return cachedState
+  readPromise = (async () => {
+    try {
+      await ensureDirs()
+      const text = await fsp.readFile(dataPath, 'utf-8')
+      cachedState = JSON.parse(text) as State
+      return cachedState
+    } catch (err: any) {
+      if (err && err.code === 'ENOENT') {
+        const s = defaultState()
+        cachedState = s
+        try {
+          await fsp.writeFile(dataPath, JSON.stringify(s, null, 2))
+        } catch (writeErr) {
+          warnOnce('Failed to write arena state file, state will be kept in memory only.', writeErr)
+        }
+        return s
+      }
+      warnOnce('Failed to read arena state file, using in-memory cache instead.', err)
+      if (cachedState) return cachedState
+      const fallback = defaultState()
+      cachedState = fallback
+      return fallback
+    } finally {
+      readPromise = null
+    }
+  })()
+
+  return readPromise
 }
 
 export async function writeState(s: State): Promise<void> {
   cachedState = s
   if (useBlob) {
+    lastBlobCheck = Date.now()
     await put('state.json', JSON.stringify(s), {
       access: 'public',
       contentType: 'application/json',
@@ -122,19 +178,15 @@ export async function writeState(s: State): Promise<void> {
       allowOverwrite: true,
       token: blobToken,
     })
-    try {
-      const meta = await head('state.json', { token: blobToken })
-      cachedUploadedAt = meta.uploadedAt.toISOString()
-    } catch (err) {
-      cachedUploadedAt = null
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('Failed to refresh arena state metadata after blob write', err)
-      }
-    }
+    cachedUploadedAt = new Date().toISOString()
     return
   }
-  ensureDirs()
-  fs.writeFileSync(dataPath, JSON.stringify(s, null, 2))
+  await ensureDirs()
+  try {
+    await fsp.writeFile(dataPath, JSON.stringify(s, null, 2))
+  } catch (err) {
+    warnOnce('Failed to persist arena state to disk, continuing with in-memory state.', err)
+  }
 }
 
 export function kFactor() {

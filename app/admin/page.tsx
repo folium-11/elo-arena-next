@@ -440,7 +440,7 @@ export default function AdminPage() {
                   <textarea
                     value={allowedNamesText}
                     onChange={(e) => setAllowedNamesText(e.target.value)}
-                    placeholder="alice\nbob"
+                    placeholder={'Alice\nBob'}
                     className="w-full h-40 rounded-3xl border border-border bg-bg backdrop-blur-md p-4 text-sm leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_6px_20px_rgba(0,0,0,0.15)]"
                   />
                   <div className="flex items-center gap-2">
