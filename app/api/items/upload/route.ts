@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/jwt-auth'
 import { readState, writeState, uploadsDir } from '@/lib/state'
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     if (!ext) ext = 'png'
 
     const filePath = path.join(uploadsDir, `${id}.${ext}`)
-    const buf = new Uint8Array(await f.arrayBuffer())
+    const buf = Buffer.from(await f.arrayBuffer())
     fs.writeFileSync(filePath, buf)
 
     let base = originalName.replace(/\.[^/.]+$/, '').trim()
@@ -41,5 +42,5 @@ export async function POST(req: NextRequest) {
   }
 
   writeState(s)
-  return Response.json({ ok: true })
+  return NextResponse.json({ ok: true })
 }
