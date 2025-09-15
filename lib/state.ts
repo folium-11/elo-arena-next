@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { head, put } from '@vercel/blob'
+import { BlobNotFoundError, head, put } from '@vercel/blob'
 
 export type Item = { id: string; name: string; imageUrl?: string | null }
 
@@ -62,26 +62,44 @@ export function defaultState(): State {
 }
 
 let cachedState: State | null = null
-const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN
+let cachedUploadedAt: string | null = null
+const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+const useBlob = !!blobToken
 
 export async function readState(): Promise<State> {
-  if (cachedState) return cachedState
-
   if (useBlob) {
     try {
-      const meta = await head('state.json', {
-        token: process.env.BLOB_READ_WRITE_TOKEN,
-      })
-      const res = await fetch(meta.downloadUrl || meta.url, { cache: 'no-store' })
-      if (res.ok) {
-        const text = await res.text()
-        cachedState = JSON.parse(text) as State
+      const meta = await head('state.json', { token: blobToken })
+      const uploadedAt = meta.uploadedAt.toISOString()
+      if (cachedState && cachedUploadedAt === uploadedAt) {
         return cachedState
       }
-    } catch {}
-    cachedState = defaultState()
-    return cachedState
+
+      const res = await fetch(meta.downloadUrl || meta.url, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`Failed to fetch state blob: ${res.status}`)
+      const text = await res.text()
+      cachedState = JSON.parse(text) as State
+      cachedUploadedAt = uploadedAt
+      return cachedState
+    } catch (err) {
+      if (err instanceof BlobNotFoundError || (err as any)?.name === 'BlobNotFoundError') {
+        const fresh = defaultState()
+        cachedState = fresh
+        cachedUploadedAt = null
+        return fresh
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to read arena state from blob, using cached/default state', err)
+      }
+      if (cachedState) return cachedState
+      const fallback = defaultState()
+      cachedState = fallback
+      cachedUploadedAt = null
+      return fallback
+    }
   }
+
+  if (cachedState) return cachedState
 
   ensureDirs()
   if (!fs.existsSync(dataPath)) {
@@ -102,8 +120,17 @@ export async function writeState(s: State): Promise<void> {
       contentType: 'application/json',
       addRandomSuffix: false,
       allowOverwrite: true,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      token: blobToken,
     })
+    try {
+      const meta = await head('state.json', { token: blobToken })
+      cachedUploadedAt = meta.uploadedAt.toISOString()
+    } catch (err) {
+      cachedUploadedAt = null
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to refresh arena state metadata after blob write', err)
+      }
+    }
     return
   }
   ensureDirs()
