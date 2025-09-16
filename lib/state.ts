@@ -80,20 +80,35 @@ export function defaultState(): State {
 let cachedState: State | null = null
 let cachedUploadedAt: string | null = null
 const blobToken = process.env.BLOB_READ_WRITE_TOKEN
-const useBlob = !!blobToken
+const isProd = process.env.NODE_ENV === 'production'
+const preferBlob = !!blobToken || isProd
+let blobErrored = false
+const blobOptions = blobToken ? { token: blobToken } : undefined
+function shouldUseBlob() {
+  return preferBlob && !blobErrored
+}
+function handleBlobFailure(err: unknown) {
+  blobErrored = true
+  if (!blobToken && isProd) {
+    throw new Error(
+      'Persistent storage requires the BLOB_READ_WRITE_TOKEN environment variable when running in production.',
+    )
+  }
+  warnOnce('Failed to use blob storage, falling back to local storage.', err)
+}
 const BLOB_CACHE_MS = 2000
 let readPromise: Promise<State> | null = null
 let lastBlobCheck = 0
 
 export async function readState(): Promise<State> {
-  if (useBlob) {
+  if (shouldUseBlob()) {
     if (cachedState && Date.now() - lastBlobCheck < BLOB_CACHE_MS) {
       return cachedState
     }
     if (readPromise) return readPromise
     readPromise = (async () => {
       try {
-        const meta = await head('state.json', { token: blobToken })
+        const meta = await head('state.json', blobOptions)
         const uploadedAt = meta.uploadedAt.toISOString()
         if (cachedState && cachedUploadedAt === uploadedAt) {
           lastBlobCheck = Date.now()
@@ -115,8 +130,11 @@ export async function readState(): Promise<State> {
           lastBlobCheck = Date.now()
           return fresh
         }
-        if (process.env.NODE_ENV !== 'production') {
-          console.error('Failed to read arena state from blob, using cached/default state', err)
+        try {
+          handleBlobFailure(err)
+        } catch (fatal) {
+          readPromise = null
+          throw fatal
         }
         if (cachedState) {
           lastBlobCheck = Date.now()
@@ -168,23 +186,30 @@ export async function readState(): Promise<State> {
 
 export async function writeState(s: State): Promise<void> {
   cachedState = s
-  if (useBlob) {
-    lastBlobCheck = Date.now()
-    await put('state.json', JSON.stringify(s), {
-      access: 'public',
-      contentType: 'application/json',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      token: blobToken,
-    })
-    cachedUploadedAt = new Date().toISOString()
-    return
+  if (shouldUseBlob()) {
+    try {
+      lastBlobCheck = Date.now()
+      await put('state.json', JSON.stringify(s), {
+        access: 'public',
+        contentType: 'application/json',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        ...blobOptions,
+      })
+      cachedUploadedAt = new Date().toISOString()
+      return
+    } catch (err) {
+      handleBlobFailure(err)
+    }
   }
   await ensureDirs()
   try {
     await fsp.writeFile(dataPath, JSON.stringify(s, null, 2))
   } catch (err) {
     warnOnce('Failed to persist arena state to disk, continuing with in-memory state.', err)
+    throw new Error(
+      'Unable to persist arena state to disk. Configure BLOB_READ_WRITE_TOKEN to enable durable storage in production.',
+    )
   }
 }
 
