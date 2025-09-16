@@ -44,7 +44,17 @@ export async function POST(req: NextRequest) {
           contentType: f.type || 'application/octet-stream',
           token: process.env.BLOB_READ_WRITE_TOKEN,
         })
-        url = blobUrl
+        let cleanUrl = blobUrl
+        try {
+          const parsed = new URL(blobUrl)
+          parsed.search = ''
+          parsed.hash = ''
+          cleanUrl = parsed.toString()
+        } catch {
+          const idx = blobUrl.indexOf('?')
+          cleanUrl = idx >= 0 ? blobUrl.slice(0, idx) : blobUrl
+        }
+        url = cleanUrl
       } else {
         const filePath = path.join(uploadsDir, `${id}.${ext}`)
         await fsp.writeFile(filePath, buffer)
