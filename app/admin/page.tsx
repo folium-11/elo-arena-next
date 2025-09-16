@@ -6,7 +6,7 @@ import { Section } from '@/components/Section'
 import { useDialog } from '@/components/DialogProvider'
 import FancySelect from '@/components/FancySelect'
 
-type Item = { id: string; name: string; imageUrl?: string | null }
+type Item = { id: string; name: string; imageUrl?: string | null; imageData?: string | null }
 type Role = 'none' | 'admin' | 'super_admin'
 
 export default function AdminPage() {
@@ -271,8 +271,12 @@ export default function AdminPage() {
       <div className="space-y-2">
         {items.map((it) => (
           <div key={it.id} className="flex items-center gap-4 border border-border rounded-2xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.20)] hover:shadow-[0_14px_40px_rgba(0,0,0,0.35)] transition-shadow">
-            {it.imageUrl ? (
-              <img src={it.imageUrl} alt={it.name} className="h-16 w-16 object-cover rounded-2xl" />
+            {it.imageData || it.imageUrl ? (
+              <img
+                src={it.imageData || it.imageUrl || undefined}
+                alt={it.name}
+                className="h-16 w-16 object-cover rounded-2xl"
+              />
             ) : (
               <div className="h-16 w-16 flex items-center justify-center rounded-2xl border border-border text-xs text-subtext">
                 Text

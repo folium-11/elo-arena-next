@@ -1,6 +1,11 @@
 import { sanitizeItem, type Item, type State } from '@/lib/state'
 
-export type PublicItem = { id: string; name: string; imageUrl?: string | null }
+export type PublicItem = {
+  id: string
+  name: string
+  imageUrl?: string | null
+  imageData?: string | null
+}
 export type Pair = [PublicItem, PublicItem]
 export type GlobalLeaderboardRow = {
   rank: number

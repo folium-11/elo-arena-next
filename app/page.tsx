@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Card from '@/components/Card'
 import { Section } from '@/components/Section'
 
-type Item = { id: string; name: string; imageUrl?: string | null }
+type Item = { id: string; name: string; imageUrl?: string | null; imageData?: string | null }
 type Pair = [Item, Item]
 type PersonalMode = 'anon' | 'signedIn' | 'signedOut'
 type GlobalRow = { rank: number; id: string; name: string; rating: number; w: number; l: number; wp: number }
@@ -67,6 +67,7 @@ function normalizeHomePayload(data: any): HomePayload {
           id: String(it?.id || ''),
           name: String(it?.name || ''),
           imageUrl: typeof it?.imageUrl === 'string' ? it.imageUrl : null,
+          imageData: typeof it?.imageData === 'string' ? it.imageData : null,
         }))
         .filter((it: Item) => it.id && it.name)
     : []
@@ -79,11 +80,13 @@ function normalizeHomePayload(data: any): HomePayload {
       id: String(first?.id || ''),
       name: String(first?.name || ''),
       imageUrl: typeof first?.imageUrl === 'string' ? first.imageUrl : null,
+      imageData: typeof first?.imageData === 'string' ? first.imageData : null,
     }
     const b: Item = {
       id: String(second?.id || ''),
       name: String(second?.name || ''),
       imageUrl: typeof second?.imageUrl === 'string' ? second.imageUrl : null,
+      imageData: typeof second?.imageData === 'string' ? second.imageData : null,
     }
     if (a.id && a.name && b.id && b.name) {
       pair = [a, b]
@@ -364,9 +367,10 @@ export default function Home() {
 
   function renderItem(it: Item | null) {
     if (!it) return null
+    const src = it.imageData || it.imageUrl || null
     return (
       <div className="flex flex-col items-center gap-4">
-        {it.imageUrl ? <img src={it.imageUrl} alt={it.name} className="rounded-xl max-h-[320px]" /> : null}
+        {src ? <img src={src} alt={it.name} className="rounded-xl max-h-[320px]" /> : null}
         <div className="text-sm text-text">{it.name}</div>
       </div>
     )
