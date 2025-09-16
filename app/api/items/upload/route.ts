@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData()
   const files = form.getAll('files') as File[]
-  const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+  const useBlob = !!blobToken
 
   if (!useBlob) await fsp.mkdir(uploadsDir, { recursive: true })
 
@@ -32,25 +33,52 @@ export async function POST(req: NextRequest) {
 
       const buffer = Buffer.from(await f.arrayBuffer())
 
+      const mimeType = (() => {
+        const explicit = String(f.type || '').trim().toLowerCase()
+        if (explicit) return explicit
+        switch (ext) {
+          case 'jpg':
+          case 'jpeg':
+            return 'image/jpeg'
+          case 'png':
+            return 'image/png'
+          case 'gif':
+            return 'image/gif'
+          case 'webp':
+            return 'image/webp'
+          case 'svg':
+            return 'image/svg+xml'
+          case 'bmp':
+            return 'image/bmp'
+          case 'avif':
+            return 'image/avif'
+          default:
+            return 'application/octet-stream'
+        }
+      })()
+
       let url: string
+      let imageData: string | null = null
       if (useBlob) {
         const { url: blobUrl } = await put(`uploads/${id}.${ext}`, buffer, {
           access: 'public',
-          contentType: f.type || 'application/octet-stream',
-          token: process.env.BLOB_READ_WRITE_TOKEN,
+          contentType: mimeType,
+          token: blobToken,
         })
         url = blobUrl
       } else {
         const filePath = path.join(uploadsDir, `${id}.${ext}`)
         await fsp.writeFile(filePath, buffer)
         url = `/uploads/${id}.${ext}`
+        const base64 = buffer.toString('base64')
+        imageData = `data:${mimeType};base64,${base64}`
       }
 
       let base = originalName.replace(/\.[^/.]+$/, '').trim()
       if (!base) base = originalName
       if (base.length > 120) base = base.slice(0, 120)
 
-      return { id, name: base, imageUrl: url }
+      return { id, name: base, imageUrl: url, imageData }
     }),
   )
 

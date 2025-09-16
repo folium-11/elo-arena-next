@@ -2,7 +2,7 @@ import path from 'path'
 import { promises as fsp } from 'fs'
 import { BlobNotFoundError, head, put } from '@vercel/blob'
 
-export type Item = { id: string; name: string; imageUrl?: string | null }
+export type Item = { id: string; name: string; imageUrl?: string | null; imageData?: string | null }
 
 export type State = {
   arenaTitle: string
@@ -204,7 +204,12 @@ export function ensureItemStats(s: State, id: string) {
 
 export function sanitizeItem(s: State, it: Item) {
   const name = s.nameOverrides[it.id] || it.name
-  return { id: it.id, name, imageUrl: it.imageUrl || null }
+  return {
+    id: it.id,
+    name,
+    imageUrl: it.imageUrl || null,
+    imageData: it.imageData || null,
+  }
 }
 
 export async function ensurePair(
