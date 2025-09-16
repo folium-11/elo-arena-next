@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
   const form = await req.formData()
   const files = form.getAll('files') as File[]
   const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN
+  const createdFiles: string[] = []
 
   if (!useBlob) await fsp.mkdir(uploadsDir, { recursive: true })
 
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
       } else {
         const filePath = path.join(uploadsDir, `${id}.${ext}`)
         await fsp.writeFile(filePath, buffer)
+        createdFiles.push(filePath)
         url = `/uploads/${id}.${ext}`
       }
 
@@ -66,6 +68,20 @@ export async function POST(req: NextRequest) {
     s.appearances[item.id] = 0
   }
 
-  await writeState(s)
+  try {
+    await writeState(s)
+  } catch (err) {
+    if (!useBlob && createdFiles.length) {
+      await Promise.all(
+        createdFiles.map(async (fp) => {
+          try {
+            await fsp.unlink(fp)
+          } catch {}
+        }),
+      )
+    }
+    return NextResponse.json({ ok: false, error: 'persist_failed' }, { status: 500 })
+  }
+
   return NextResponse.json({ ok: true })
 }

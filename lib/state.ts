@@ -1,6 +1,7 @@
 import path from 'path'
 import { promises as fsp } from 'fs'
 import { BlobNotFoundError, head, put } from '@vercel/blob'
+import { structuredClone } from 'node:util'
 
 export type Item = {
   id: string
@@ -36,6 +37,10 @@ export const dataPath = path.join(process.cwd(), 'app', 'data', 'state.json')
 export const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
 
 const warnedMessages = new Set<string>()
+
+function cloneState<T>(state: T): T {
+  return structuredClone(state)
+}
 
 function warnOnce(msg: string, err: unknown) {
   if (warnedMessages.has(msg)) return
@@ -83,6 +88,7 @@ export function defaultState(): State {
 }
 
 let cachedState: State | null = null
+let persistedState: State | null = null
 let cachedUploadedAt: string | null = null
 const blobToken = process.env.BLOB_READ_WRITE_TOKEN
 const useBlob = !!blobToken
@@ -108,17 +114,20 @@ export async function readState(): Promise<State> {
         const res = await fetch(meta.downloadUrl || meta.url, { cache: 'no-store' })
         if (!res.ok) throw new Error(`Failed to fetch state blob: ${res.status}`)
         const text = await res.text()
-        cachedState = JSON.parse(text) as State
+        const parsed = JSON.parse(text) as State
+        persistedState = parsed
+        cachedState = cloneState(parsed)
         cachedUploadedAt = uploadedAt
         lastBlobCheck = Date.now()
         return cachedState
       } catch (err) {
         if (err instanceof BlobNotFoundError || (err as any)?.name === 'BlobNotFoundError') {
           const fresh = defaultState()
-          cachedState = fresh
+          persistedState = cloneState(fresh)
+          cachedState = cloneState(fresh)
           cachedUploadedAt = null
           lastBlobCheck = Date.now()
-          return fresh
+          return cachedState
         }
         if (process.env.NODE_ENV !== 'production') {
           console.error('Failed to read arena state from blob, using cached/default state', err)
@@ -128,10 +137,11 @@ export async function readState(): Promise<State> {
           return cachedState
         }
         const fallback = defaultState()
-        cachedState = fallback
+        persistedState = cloneState(fallback)
+        cachedState = cloneState(fallback)
         cachedUploadedAt = null
         lastBlobCheck = Date.now()
-        return fallback
+        return cachedState
       } finally {
         readPromise = null
       }
@@ -146,24 +156,28 @@ export async function readState(): Promise<State> {
     try {
       await ensureDirs()
       const text = await fsp.readFile(dataPath, 'utf-8')
-      cachedState = JSON.parse(text) as State
+      const parsed = JSON.parse(text) as State
+      persistedState = parsed
+      cachedState = cloneState(parsed)
       return cachedState
     } catch (err: any) {
       if (err && err.code === 'ENOENT') {
         const s = defaultState()
-        cachedState = s
+        persistedState = cloneState(s)
+        cachedState = cloneState(s)
         try {
           await fsp.writeFile(dataPath, JSON.stringify(s, null, 2))
         } catch (writeErr) {
           warnOnce('Failed to write arena state file, state will be kept in memory only.', writeErr)
         }
-        return s
+        return cachedState
       }
       warnOnce('Failed to read arena state file, using in-memory cache instead.', err)
       if (cachedState) return cachedState
       const fallback = defaultState()
-      cachedState = fallback
-      return fallback
+      persistedState = cloneState(fallback)
+      cachedState = cloneState(fallback)
+      return cachedState
     } finally {
       readPromise = null
     }
@@ -172,24 +186,54 @@ export async function readState(): Promise<State> {
 }
 
 export async function writeState(s: State): Promise<void> {
-  cachedState = s
   if (useBlob) {
     lastBlobCheck = Date.now()
-    await put('state.json', JSON.stringify(s), {
-      access: 'public',
-      contentType: 'application/json',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      token: blobToken,
-    })
-    cachedUploadedAt = new Date().toISOString()
+    const previous = persistedState ? cloneState(persistedState) : null
+    const prevUploadedAt = cachedUploadedAt
+    try {
+      await put('state.json', JSON.stringify(s), {
+        access: 'public',
+        contentType: 'application/json',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        token: blobToken,
+      })
+      cachedState = s
+      persistedState = cloneState(s)
+      cachedUploadedAt = new Date().toISOString()
+    } catch (err) {
+      warnOnce('Failed to persist arena state to blob storage.', err)
+      if (previous) {
+        persistedState = previous
+        cachedState = cloneState(previous)
+        cachedUploadedAt = prevUploadedAt
+      } else {
+        const fallback = defaultState()
+        persistedState = cloneState(fallback)
+        cachedState = cloneState(fallback)
+        cachedUploadedAt = null
+      }
+      throw err
+    }
     return
   }
   await ensureDirs()
+  const previous = persistedState ? cloneState(persistedState) : null
   try {
     await fsp.writeFile(dataPath, JSON.stringify(s, null, 2))
+    cachedState = s
+    persistedState = cloneState(s)
   } catch (err) {
     warnOnce('Failed to persist arena state to disk, continuing with in-memory state.', err)
+    if (previous) {
+      persistedState = previous
+      cachedState = cloneState(previous)
+    } else {
+      const fallback = defaultState()
+      persistedState = cloneState(fallback)
+      cachedState = cloneState(fallback)
+    }
+    throw err
   }
 }
 
