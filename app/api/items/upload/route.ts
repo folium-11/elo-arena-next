@@ -32,6 +32,11 @@ export async function POST(req: NextRequest) {
 
       const buffer = Buffer.from(await f.arrayBuffer())
 
+      const mimeType = f.type?.trim() || (ext === 'jpg' ? 'image/jpeg' : `image/${ext}`)
+      const imageData = !useBlob
+        ? `data:${mimeType};base64,${buffer.toString('base64')}`
+        : null
+
       let url: string
       if (useBlob) {
         const { url: blobUrl } = await put(`uploads/${id}.${ext}`, buffer, {
@@ -50,7 +55,7 @@ export async function POST(req: NextRequest) {
       if (!base) base = originalName
       if (base.length > 120) base = base.slice(0, 120)
 
-      return { id, name: base, imageUrl: url }
+      return { id, name: base, imageUrl: url, imageData }
     }),
   )
 
