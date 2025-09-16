@@ -1,4 +1,5 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Card from '@/components/Card'
@@ -170,11 +171,26 @@ export default function AdminPage() {
     setUploadNote(`Uploading ${files.length} ${fileWord}…`)
     const fd = new FormData()
     Array.from(files).forEach((f) => fd.append('files', f))
-    const r = await fetch('/api/items/upload/', { method: 'POST', body: fd })
-    if (!r.ok) setUploadNote('Upload failed')
-    else setUploadNote('Upload complete')
+    let ok = false
+    try {
+      const r = await fetch('/api/items/upload/', { method: 'POST', body: fd })
+      if (!r.ok) {
+        let message = 'Upload failed'
+        try {
+          const err = await r.json()
+          if (err?.error) message = String(err.error)
+        } catch {}
+        setUploadNote(message)
+      } else {
+        setUploadNote('Upload complete')
+        ok = true
+      }
+    } catch (err) {
+      console.error('Upload request failed', err)
+      setUploadNote('Upload failed')
+    }
     setUploadBusy(false)
-    refreshState()
+    if (ok) refreshState()
   }
 
   async function addText() {
