@@ -37,6 +37,18 @@ export const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
 
 const warnedMessages = new Set<string>()
 
+export class StatePersistenceError extends Error {
+  cause?: unknown
+
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message)
+    this.name = 'StatePersistenceError'
+    if (options?.cause !== undefined) {
+      this.cause = options.cause
+    }
+  }
+}
+
 function warnOnce(msg: string, err: unknown) {
   if (warnedMessages.has(msg)) return
   warnedMessages.add(msg)
@@ -189,7 +201,8 @@ export async function writeState(s: State): Promise<void> {
   try {
     await fsp.writeFile(dataPath, JSON.stringify(s, null, 2))
   } catch (err) {
-    warnOnce('Failed to persist arena state to disk, continuing with in-memory state.', err)
+    warnOnce('Failed to persist arena state to disk.', err)
+    throw new StatePersistenceError('Failed to persist arena state to disk.', { cause: err })
   }
 }
 
